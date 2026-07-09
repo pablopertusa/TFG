@@ -1,0 +1,15 @@
+command: ["uv", "run", "custom-mcp-server"]
+
+env:
+  - name: "GENIE_SERIALIZATION_JOB_ID"
+    value: "405956489806901"
+  - name: "GENIE_RESTORE_POINTS_JOB_ID"
+    value: "191614083444231"
+  - name: "GENIE_RESTORE_JOB_ID"
+    value: "411926808267885"
+  - name: "ATLAN_API_KEY"
+    valueFrom: "atlan-api-key"
+  - name: "ATLAN_BASE_URL"
+    value: "https://hp.atlan.com/"
+  - name: "GENIE_SPACE_WAREHOUSE_ID"
+    value: "38cb31e24512fd55"

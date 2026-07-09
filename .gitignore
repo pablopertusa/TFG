@@ -1,0 +1,7 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+genie_library/.env
+scripts/dev/local_test.env
