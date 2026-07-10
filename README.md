@@ -1,4 +1,4 @@
-# MCP Server - Hello World
+# MCP Server - PoC 
 
 A simple, production-ready template for building Model Context Protocol (MCP) servers using FastMCP and FastAPI. This project demonstrates how to create custom tools that AI assistants can discover and invoke.
 
