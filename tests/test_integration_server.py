@@ -90,6 +90,8 @@ def test_list_tools(run_mcp_server):
     assert "health" in tool_names
     assert "get_current_user" in tool_names
     assert "list_available_genie_spaces" in tool_names
+    assert "get_genie_space_details" in tool_names
+    assert "list_genie_space_tags" in tool_names
     assert "list_available_dashboards" in tool_names
     assert "get_dashboard_details" in tool_names
     assert "preview_genie_space_from_dashboard" in tool_names
@@ -101,14 +103,16 @@ def test_list_tools(run_mcp_server):
     assert "list_genie_benchmark_run_results" in tool_names
     assert "get_genie_benchmark_result_details" in tool_names
     assert "grant_space_permissions" in tool_names
+    assert "find_genie_spaces_by_tag" in tool_names
+    assert "list_genie_space_conversations" in tool_names
+    assert "list_genie_conversation_messages" in tool_names
+    assert "list_genie_space_permissions" in tool_names
     assert "start_genie_serialization_job" in tool_names
     assert "get_genie_serialization_job_run" in tool_names
-    assert "start_genie_serialization_job_and_wait" in tool_names
     assert "list_genie_space_restore_points" in tool_names
     assert "get_genie_restore_points_job_run" in tool_names
     assert "start_genie_space_restore_job" in tool_names
     assert "get_genie_space_restore_job_run" in tool_names
-    assert "start_genie_space_restore_job_and_wait" in tool_names
 
 
 # Test no-argument tools run without errors
@@ -156,25 +160,6 @@ def test_create_genie_space_from_dashboard_requires_confirmation(run_mcp_server)
     _print_tool_result("create_genie_space_from_dashboard", result)
     assert result is not None
 
-def test_create_genie_space_from_dashboard_with_confirmation(run_mcp_server):
-    dashboard_id = os.getenv("DASHBOARD_TEST_ID")
-    if not dashboard_id:
-        pytest.skip("Set DASHBOARD_TEST_ID to run dashboard creation confirmation tests")
-
-    url = run_mcp_server
-    mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
-    result = mcp_client.call_tool(
-        "create_genie_space_from_dashboard",
-        {
-            "dashboard_id": dashboard_id,
-            "genie_space_title": "Integration Test Preview",
-            "confirmation": "CONFIRM CREATE GENIE SPACE FROM DASHBOARD",
-            "include_atlan_context": True
-        },
-    )
-    _print_tool_result("create_genie_space_from_dashboard", result)
-    assert result is not None
-
 
 def test_get_user_name_from_id(run_mcp_server):
     user_id = os.getenv("DATABRICKS_TEST_USER_ID")
@@ -206,6 +191,23 @@ def test_genie_space_detail_tools(run_mcp_server):
         result = mcp_client.call_tool(tool_name, {"space_id": space_id})
         _print_tool_result(tool_name, result)
         assert result is not None
+
+
+def test_find_genie_spaces_by_tag(run_mcp_server):
+    tag_key = os.getenv("GENIE_TEST_TAG_KEY")
+    if not tag_key:
+        pytest.skip("Set GENIE_TEST_TAG_KEY to run Genie tag search integration tests")
+
+    arguments = {"tag_key": tag_key}
+    tag_value = os.getenv("GENIE_TEST_TAG_VALUE")
+    if tag_value:
+        arguments["tag_value"] = tag_value
+
+    url = run_mcp_server
+    mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
+    result = mcp_client.call_tool("find_genie_spaces_by_tag", arguments)
+    _print_tool_result("find_genie_spaces_by_tag", result)
+    assert result is not None
 
 
 def test_genie_conversation_messages(run_mcp_server):
@@ -260,48 +262,54 @@ def test_genie_benchmark_result_details(run_mcp_server):
     assert result is not None
 
 
-#def test_confirmation_gated_tools(run_mcp_server):
-    #space_id = os.getenv("GENIE_TEST_SPACE_ID")
-    #if not space_id:
-        #pytest.skip("Set GENIE_TEST_SPACE_ID to run confirmation-gated tool tests")
+def test_confirmation_required_tools(run_mcp_server):
+    space_id = os.getenv("GENIE_TEST_SPACE_ID")
+    dashboard_id = os.getenv("DASHBOARD_TEST_ID")
+    if not space_id or not dashboard_id:
+        pytest.skip("Set GENIE_TEST_SPACE_ID and DASHBOARD_TEST_ID to run confirmation tests")
 
-    #url = run_mcp_server
-    #mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
-    #calls = [
-        #(
-            #"grant_space_permissions",
-            #{
-                #"space_id": space_id,
-                #"user_name_list": ["nobody@example.com"],
-                #"permission_level": "CAN_READ",
-            #},
-        #),
-        #("start_genie_serialization_job", {"space_id": space_id}),
-        #(
-            #"start_genie_space_restore_job",
-            #{"space_id": space_id, "snapshot_date": "2026-01-01"},
-        #),
-        #(
-            #"start_genie_space_restore_job_and_wait",
-            #{"space_id": space_id, "snapshot_date": "2026-01-01"},
-        #),
-    #]
-    #for tool_name, arguments in calls:
-        #result = mcp_client.call_tool(tool_name, arguments)
-        #assert result is not None
+    url = run_mcp_server
+    mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
+    calls = [
+        (
+            "create_genie_space_from_dashboard",
+            {
+                "dashboard_id": dashboard_id,
+                "genie_space_title": "Integration Test Preview Only",
+            },
+        ),
+        (
+            "grant_space_permissions",
+            {
+                "space_id": space_id,
+                "user_name_list": ["nobody@example.com"],
+                "permission_level": "CAN_READ",
+            },
+        ),
+        ("start_genie_serialization_job", {"space_id": space_id}),
+        (
+            "start_genie_space_restore_job",
+            {"space_id": space_id, "snapshot_date": "2026-01-01"},
+        ),
+    ]
+    for tool_name, arguments in calls:
+        result = mcp_client.call_tool(tool_name, arguments)
+        _print_tool_result(tool_name, result)
+        assert result is not None
 
 
-#def test_job_status_tools(run_mcp_server):
-    #run_id = os.getenv("DATABRICKS_TEST_JOB_RUN_ID")
-    #if not run_id:
-        #pytest.skip("Set DATABRICKS_TEST_JOB_RUN_ID to run job status integration tests")
+def test_job_status_tools(run_mcp_server):
+    run_id = os.getenv("DATABRICKS_TEST_JOB_RUN_ID")
+    if not run_id:
+        pytest.skip("Set DATABRICKS_TEST_JOB_RUN_ID to run job status integration tests")
 
-    #url = run_mcp_server
-    #mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
-    #for tool_name in [
-        #"get_genie_serialization_job_run",
-        #"get_genie_restore_points_job_run",
-        #"get_genie_space_restore_job_run",
-    #]:
-        #result = mcp_client.call_tool(tool_name, {"run_id": int(run_id)})
-        #assert result is not None
+    url = run_mcp_server
+    mcp_client = DatabricksMCPClient(server_url=f"{url}/mcp")
+    for tool_name in [
+        "get_genie_serialization_job_run",
+        "get_genie_restore_points_job_run",
+        "get_genie_space_restore_job_run",
+    ]:
+        result = mcp_client.call_tool(tool_name, {"run_id": int(run_id)})
+        _print_tool_result(tool_name, result)
+        assert result is not None
