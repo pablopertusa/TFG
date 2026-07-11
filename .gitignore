@@ -6,3 +6,4 @@ __pycache__/
 genie_library/.env
 scripts/dev/local_test.env
 .vscode
+Claude.md
