@@ -15,16 +15,13 @@ Each tool should:
 import datetime
 import json
 import os
-import re
 import time
-import uuid
 from collections import Counter
 from typing import Any
 
 from databricks.sdk.service.iam import AccessControlRequest, PermissionLevel
 
 from server import utils
-
 
 MAX_TOOL_ITEMS = 100
 RUN_SERIALIZATION_JOB_CONFIRMATION = "CONFIRM RUN GENIE SERIALIZATION JOB"
@@ -34,10 +31,8 @@ TERMINAL_JOB_LIFE_CYCLE_STATES = {"TERMINATED", "SKIPPED", "INTERNAL_ERROR"}
 GENIE_SERIALIZATION_JOB_ID_ENV = "GENIE_SERIALIZATION_JOB_ID"
 GENIE_RESTORE_POINTS_JOB_ID_ENV = "GENIE_RESTORE_POINTS_JOB_ID"
 GENIE_RESTORE_JOB_ID_ENV = "GENIE_RESTORE_JOB_ID"
-GENIE_SPACE_WAREHOUSE_ID_ENV = "GENIE_SPACE_WAREHOUSE_ID"
 ATLAN_API_KEY_ENV = "ATLAN_API_KEY"
 ATLAN_BASE_URL_ENV = "ATLAN_BASE_URL"
-CREATE_GENIE_SPACE_FROM_DASHBOARD_CONFIRMATION = "CONFIRM CREATE GENIE SPACE FROM DASHBOARD"
 ATLAN_GOLD_QUALIFIED_NAME_PREFIX = "default/databricks/1732657096/lf_udm_prod/gold/"
 ATLAN_METRIC_VIEWS_QUALIFIED_NAME_PREFIX = (
     "default/databricks/1732657096/lf_udm_prod/gold_metric_views/"
@@ -251,72 +246,25 @@ def _restore_confirmation(space_id: str, snapshot_date: str) -> str:
     return f"CONFIRM RESTORE GENIE SPACE {space_id} {snapshot_date}"
 
 
-def _clean_complex_params_from_query(query: list[str]) -> list[str]:
-    expr = r"""array_contains\(\s*(:[`\w]+)\s*,\s*([`\w.'"]+(?: [`\w.'"]+)*)\s*\)"""
-    return [re.sub(expr, r"\2 = \1", line) for line in query]
-
-
-def _parse_dashboard_serialized_content(serialized_dashboard: str) -> dict[str, Any]:
-    serialized_dict = json.loads(serialized_dashboard)
-    result: dict[str, Any] = {"data": [], "joins": [], "queries": []}
-
-    for source in serialized_dict.get("datasets", []):
-        if "queryLines" in source:
-            query = {
-                "display_name": source.get("displayName"),
-                "query_lines": _clean_complex_params_from_query(source.get("queryLines") or []),
-            }
-            if "parameters" in source:
-                query["parameters"] = source["parameters"]
-            result["queries"].append(query)
-        elif "asset_name" in source:
-            result["data"].append(
-                {
-                    "type": "metric_view",
-                    "display_name": source.get("displayName"),
-                    "source": source.get("asset_name"),
-                }
-            )
-        elif "config" in source:
-            config = source.get("config") or {}
-            table_source = config.get("source")
-            data = {
-                "type": "table",
-                "display_name": source.get("displayName"),
-                "source": table_source,
-                "dimensions": config.get("dimensions") or [],
-            }
-            result["data"].append(data)
-            for join in config.get("joins") or []:
-                join_source = join.get("source")
-                join_name = join.get("name")
-                join_on = join.get("on") or ""
-                if table_source and join_source and join_name:
-                    normalized_on = join_on.replace(
-                        "source.",
-                        table_source.split(".")[2] + ".",
-                    ).replace(join_name, join_source.split(".")[2])
-                else:
-                    normalized_on = join_on
-                result["joins"].append(
-                    {
-                        "name": join_name,
-                        "left": table_source,
-                        "right": join_source,
-                        "on": normalized_on,
-                    }
-                )
-
-    return result
-
-
 def _remove_html_tags(value: str) -> str:
     from bs4 import BeautifulSoup
 
     return BeautifulSoup(value, "html.parser").get_text()
 
 
-def _get_atlan_context(table_name: str) -> str | None:
+def _parse_databricks_table_identifier(table_identifier: str) -> dict[str, str]:
+    parts = [part.strip() for part in table_identifier.split(".")]
+    if len(parts) != 3 or any(not part for part in parts):
+        raise ValueError("table_identifier must use catalog.schema.table format")
+    return {
+        "catalog": parts[0],
+        "schema": parts[1],
+        "table": parts[2],
+        "identifier": ".".join(parts),
+    }
+
+
+def _get_atlan_client():
     api_key = os.getenv(ATLAN_API_KEY_ENV)
     base_url = os.getenv(ATLAN_BASE_URL_ENV)
     if not api_key:
@@ -325,45 +273,159 @@ def _get_atlan_context(table_name: str) -> str | None:
         raise ValueError(f"{ATLAN_BASE_URL_ENV} is not configured")
 
     from pyatlan.client.atlan import AtlanClient
+
+    return AtlanClient(base_url=base_url, api_key=api_key)
+
+
+def _atlan_model_classes():
     from pyatlan.model.assets import AtlasGlossaryTerm, DatabricksMetricView, Readme, Table
     from pyatlan.model.fluent_search import CompoundQuery, FluentSearch
 
-    client = AtlanClient(base_url=base_url, api_key=api_key)
-    table_parts = table_name.split(".")
-    asset_name = table_parts[-1]
-    schema_name = table_parts[1] if len(table_parts) > 1 else ""
+    return {
+        "AtlasGlossaryTerm": AtlasGlossaryTerm,
+        "CompoundQuery": CompoundQuery,
+        "DatabricksMetricView": DatabricksMetricView,
+        "FluentSearch": FluentSearch,
+        "Readme": Readme,
+        "Table": Table,
+    }
 
-    if schema_name == "gold":
-        qualified_name = ATLAN_GOLD_QUALIFIED_NAME_PREFIX + asset_name
-        asset_type = Table
-        assigned_terms_attr = Table.ASSIGNED_TERMS
-    else:
-        qualified_name = ATLAN_METRIC_VIEWS_QUALIFIED_NAME_PREFIX + asset_name
-        asset_type = DatabricksMetricView
-        assigned_terms_attr = DatabricksMetricView.ASSIGNED_TERMS
 
+def _atlan_asset_specs(parsed_identifier: dict[str, str]) -> list[dict[str, Any]]:
+    models = _atlan_model_classes()
+    table_name = parsed_identifier["table"]
+    specs = [
+        {
+            "asset_type": models["Table"],
+            "assigned_terms_attr": models["Table"].ASSIGNED_TERMS,
+            "qualified_name": ATLAN_GOLD_QUALIFIED_NAME_PREFIX + table_name,
+            "expected_schema": "gold",
+        },
+        {
+            "asset_type": models["DatabricksMetricView"],
+            "assigned_terms_attr": models["DatabricksMetricView"].ASSIGNED_TERMS,
+            "qualified_name": ATLAN_METRIC_VIEWS_QUALIFIED_NAME_PREFIX + table_name,
+            "expected_schema": "gold_metric_views",
+        },
+    ]
+    schema = parsed_identifier["schema"]
+    matching_schema_specs = [spec for spec in specs if spec["expected_schema"] == schema]
+    return matching_schema_specs or specs
+
+
+def _build_atlan_search_request(
+    spec: dict[str, Any],
+    qualified_name: str | None = None,
+    asset_name: str | None = None,
+):
+    models = _atlan_model_classes()
+    Table = models["Table"]
+    CompoundQuery = models["CompoundQuery"]
+    FluentSearch = models["FluentSearch"]
+
+    if not qualified_name and not asset_name:
+        raise ValueError("qualified_name or asset_name is required")
+
+    name_attr = getattr(spec["asset_type"], "NAME", Table.NAME)
+    qualified_name_attr = getattr(spec["asset_type"], "QUALIFIED_NAME", Table.QUALIFIED_NAME)
     request = (
         FluentSearch.select()
-        .where(Table.QUALIFIED_NAME.eq(qualified_name))
-        .where(CompoundQuery.asset_type(asset_type))
+        .where(
+            qualified_name_attr.eq(qualified_name)
+            if qualified_name
+            else name_attr.eq(asset_name)
+        )
+        .where(CompoundQuery.asset_type(spec["asset_type"]))
         .where(CompoundQuery.active_assets())
         .include_relationship_attributes(True)
-        .include_on_results(assigned_terms_attr)
-        .include_on_relations(AtlasGlossaryTerm.NAME)
-        .include_on_relations(AtlasGlossaryTerm.DESCRIPTION)
-        .include_on_relations(AtlasGlossaryTerm.README)
+        .include_on_results(spec["assigned_terms_attr"])
+        .include_on_relations(models["AtlasGlossaryTerm"].NAME)
+        .include_on_relations(models["AtlasGlossaryTerm"].DESCRIPTION)
+        .include_on_relations(models["AtlasGlossaryTerm"].README)
     ).to_request()
+    return request
 
-    results = list(client.asset.search(criteria=request))
-    if len(results) != 1:
-        return None
 
-    asset = results[0]
-    if not getattr(asset, "assigned_terms", None):
-        return None
+def _asset_qualified_name(asset: Any) -> str | None:
+    return getattr(asset, "qualified_name", None) or getattr(asset, "qualifiedName", None)
 
+
+def _asset_summary(asset: Any, match_type: str) -> dict[str, Any]:
+    return {
+        "guid": getattr(asset, "guid", None),
+        "name": getattr(asset, "name", None),
+        "qualified_name": _asset_qualified_name(asset),
+        "asset_type": getattr(asset, "type_name", None) or asset.__class__.__name__,
+        "match_type": match_type,
+    }
+
+
+def _qualified_name_matches_identifier(
+    qualified_name: str | None,
+    parsed_identifier: dict[str, str],
+) -> bool:
+    if not qualified_name:
+        return False
+    normalized = qualified_name.lower().replace(".", "/")
+    expected_suffix = (
+        f"/{parsed_identifier['catalog']}/{parsed_identifier['schema']}/{parsed_identifier['table']}"
+        .lower()
+    )
+    return expected_suffix in normalized or normalized.endswith(expected_suffix.lstrip("/"))
+
+
+def _search_atlan_assets_for_table(
+    table_identifier: str,
+    limit: int,
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    parsed_identifier = _parse_databricks_table_identifier(table_identifier)
+    safe_limit = max(1, min(limit, MAX_TOOL_ITEMS))
+    client = _get_atlan_client()
+    specs = _atlan_asset_specs(parsed_identifier)
+    seen_guids = set()
+    matches = []
+
+    for spec in specs:
+        request = _build_atlan_search_request(spec, qualified_name=spec["qualified_name"])
+        for asset in client.asset.search(criteria=request):
+            if not _qualified_name_matches_identifier(_asset_qualified_name(asset), parsed_identifier):
+                continue
+            guid = getattr(asset, "guid", None)
+            if guid in seen_guids:
+                continue
+            seen_guids.add(guid)
+            matches.append({"asset": asset, "match_type": "qualified_name"})
+            if len(matches) >= safe_limit:
+                return parsed_identifier, matches
+
+    if matches:
+        return parsed_identifier, matches
+
+    for spec in specs:
+        request = _build_atlan_search_request(spec, asset_name=parsed_identifier["table"])
+        for asset in client.asset.search(criteria=request):
+            if not _qualified_name_matches_identifier(_asset_qualified_name(asset), parsed_identifier):
+                continue
+            guid = getattr(asset, "guid", None)
+            if guid in seen_guids:
+                continue
+            seen_guids.add(guid)
+            matches.append({"asset": asset, "match_type": "asset_name"})
+            if len(matches) >= safe_limit:
+                return parsed_identifier, matches
+
+    return parsed_identifier, matches
+
+
+def _extract_atlan_context_from_asset(asset: Any, match_type: str, table_identifier: str) -> dict:
+    client = _get_atlan_client()
+    models = _atlan_model_classes()
+    AtlasGlossaryTerm = models["AtlasGlossaryTerm"]
+    Readme = models["Readme"]
+
+    terms = []
     text_parts = []
-    for term_ref in asset.assigned_terms:
+    for term_ref in getattr(asset, "assigned_terms", None) or []:
         term = client.asset.get_by_guid(
             guid=term_ref.guid,
             asset_type=AtlasGlossaryTerm,
@@ -379,105 +441,28 @@ def _get_atlan_context(table_name: str) -> str | None:
             )
             if readme_asset.description:
                 readme = _remove_html_tags(readme_asset.description)
+        term_payload = {
+            "name": getattr(term, "name", None),
+            "description": description,
+            "readme": readme,
+        }
+        terms.append(term_payload)
         if description or readme:
-            section = f"- Information from {table_name}"
+            section = f"- Information from {table_identifier}"
+            if term_payload["name"]:
+                section += f"\nTerm: {term_payload['name']}"
             if description:
                 section += f"\n{description}"
             if readme:
                 section += f"\n{readme}"
             text_parts.append(section)
 
-    if not text_parts:
-        return None
-    return "TERMS CONTEXT\n\n" + "\n\n".join(text_parts)
-
-
-def _create_serialized_space_from_parsed_dashboard(
-    parsed_dashboard: dict[str, Any],
-    include_atlan_context: bool,
-) -> str:
-    space: dict[str, Any] = {
-        "version": 2,
-        "data_sources": {},
-        "instructions": {
-            "example_question_sqls": [],
-            "join_specs": [],
-            "text_instructions": [],
-        },
+    return {
+        "asset": _asset_summary(asset, match_type=match_type),
+        "terms_count": len(terms),
+        "terms": terms,
+        "context_text": "TERMS CONTEXT\n\n" + "\n\n".join(text_parts) if text_parts else None,
     }
-    content_context = []
-
-    for data in parsed_dashboard.get("data", []):
-        source = data.get("source")
-        if not source:
-            continue
-        if "tables" not in space["data_sources"]:
-            space["data_sources"]["tables"] = []
-        table = {"identifier": source}
-        if include_atlan_context:
-            context = _get_atlan_context(table_name=source)
-            if context:
-                content_context.append(context)
-        if data.get("type") == "table":
-            table["column_configs"] = sorted(
-                [
-                    {
-                        "column_name": dimension.get("name"),
-                        "enable_format_assistance": True,
-                    }
-                    for dimension in data.get("dimensions") or []
-                    if dimension.get("name")
-                ],
-                key=lambda column: column["column_name"],
-            )
-        space["data_sources"]["tables"].append(table)
-
-    space["instructions"]["text_instructions"] = [
-        {"id": uuid.uuid4().hex, "content": content_context if content_context else [""]}
-    ]
-
-    if "tables" in space["data_sources"]:
-        space["data_sources"]["tables"] = sorted(
-            space["data_sources"]["tables"],
-            key=lambda table: table["identifier"],
-        )
-
-    for query in parsed_dashboard.get("queries", []):
-        example_query: dict[str, Any] = {
-            "id": uuid.uuid4().hex,
-            "question": [query.get("display_name")],
-            "sql": query.get("query_lines") or [],
-        }
-        if query.get("parameters"):
-            example_query["parameters"] = [
-                {"name": parameter.get("displayName"), "type_hint": parameter.get("dataType")}
-                for parameter in query["parameters"]
-            ]
-        space["instructions"]["example_question_sqls"].append(example_query)
-    space["instructions"]["example_question_sqls"] = sorted(
-        space["instructions"]["example_question_sqls"],
-        key=lambda query: query["id"],
-    )
-
-    for join in parsed_dashboard.get("joins", []):
-        left = join.get("left")
-        right = join.get("right")
-        if not left or not right:
-            continue
-        space["instructions"]["join_specs"].append(
-            {
-                "id": uuid.uuid4().hex,
-                "left": {"identifier": left, "alias": left.split(".")[-1]},
-                "right": {"identifier": right, "alias": right.split(".")[-1]},
-                "sql": [join.get("on") or "", "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"],
-            }
-        )
-    space["instructions"]["join_specs"] = sorted(
-        space["instructions"]["join_specs"],
-        key=lambda join: join["id"],
-    )
-
-    return json.dumps(space)
 
 
 def load_tools(mcp_server):
@@ -717,221 +702,84 @@ def load_tools(mcp_server):
             }
 
     @mcp_server.tool
-    def list_available_dashboards(limit: int = 50) -> dict:
+    def find_atlan_assets_by_databricks_table(
+        table_identifier: str,
+        limit: int = 20,
+    ) -> dict:
         """
-        List Lakeview dashboards available to the authenticated Databricks user.
+        Find Atlan assets matching a Databricks table identifier.
 
         Args:
-            limit: Maximum number of dashboards to return. Capped at 100.
+            table_identifier: Databricks table identifier in catalog.schema.table format.
+            limit: Maximum number of matching assets to return. Capped at 100.
 
         Returns:
-            dict: Dashboard summaries visible to the user.
+            dict: Matching Atlan assets for the provided Databricks table identifier.
         """
         try:
-            w = utils.get_user_authenticated_workspace_client()
-            dashboards = list(w.lakeview.list())
-            limited, truncated = _limit_items(dashboards, limit)
+            parsed_identifier, matches = _search_atlan_assets_for_table(
+                table_identifier=table_identifier,
+                limit=limit,
+            )
             return {
-                "auth_mode": "on_behalf_of_user",
-                "count": len(dashboards),
-                "returned_count": len(limited),
-                "truncated": truncated,
-                "dashboards": [
-                    {
-                        "dashboard_id": dashboard.dashboard_id,
-                        "display_name": dashboard.display_name,
-                        "path": dashboard.path,
-                        "parent_path": dashboard.parent_path,
-                        "warehouse_id": dashboard.warehouse_id,
-                        "lifecycle_state": str(dashboard.lifecycle_state)
-                        if dashboard.lifecycle_state
-                        else None,
-                        "create_time": dashboard.create_time,
-                        "update_time": dashboard.update_time,
-                    }
-                    for dashboard in limited
+                "auth_mode": "atlan_api_key",
+                "table_identifier": parsed_identifier["identifier"],
+                "count": len(matches),
+                "matches": [
+                    _asset_summary(match["asset"], match_type=match["match_type"])
+                    for match in matches
                 ],
             }
         except Exception as e:
             return {
-                "auth_mode": "on_behalf_of_user",
+                "auth_mode": "atlan_api_key",
+                "table_identifier": table_identifier,
                 "error": str(e),
-                "dashboards": [],
+                "matches": [],
             }
 
     @mcp_server.tool
-    def get_dashboard_details(dashboard_id: str) -> dict:
-        """
-        Get details for a Lakeview dashboard available to the authenticated Databricks user.
-
-        Args:
-            dashboard_id: Databricks Lakeview dashboard ID.
-
-        Returns:
-            dict: Dashboard details. The serialized_dashboard field is omitted to avoid oversized responses.
-        """
-        try:
-            w = utils.get_user_authenticated_workspace_client()
-            dashboard = w.lakeview.get(dashboard_id=dashboard_id)
-            serialized_dashboard = _serialize_databricks_object(dashboard)
-            serialized_dashboard.pop("serialized_dashboard", None)
-            return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard": serialized_dashboard,
-            }
-        except Exception as e:
-            return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard_id": dashboard_id,
-                "error": str(e),
-            }
-
-    @mcp_server.tool
-    def preview_genie_space_from_dashboard(
-        dashboard_id: str,
-        include_atlan_context: bool = False,
+    def get_atlan_context_for_databricks_table(
+        table_identifier: str,
+        limit: int = 20,
     ) -> dict:
         """
-        Preview the Genie Space configuration that would be generated from a Lakeview dashboard.
+        Get business context from Atlan for a Databricks table identifier.
 
         Args:
-            dashboard_id: Databricks Lakeview dashboard ID.
-            include_atlan_context: Whether to validate and include Atlan glossary context.
+            table_identifier: Databricks table identifier in catalog.schema.table format.
+            limit: Maximum number of matching assets to inspect. Capped at 100.
 
         Returns:
-            dict: Parsed dashboard datasets, queries, joins, and serialized Genie Space preview.
+            dict: Structured Atlan context for each matching asset, including glossary terms and text.
         """
         try:
-            w = utils.get_user_authenticated_workspace_client()
-            dashboard = w.lakeview.get(dashboard_id=dashboard_id)
-            if not dashboard.serialized_dashboard:
-                raise ValueError("Selected dashboard has no serialized_dashboard attribute")
-            parsed_dashboard = _parse_dashboard_serialized_content(dashboard.serialized_dashboard)
-            serialized_space = _create_serialized_space_from_parsed_dashboard(
-                parsed_dashboard=parsed_dashboard,
-                include_atlan_context=include_atlan_context,
+            parsed_identifier, matches = _search_atlan_assets_for_table(
+                table_identifier=table_identifier,
+                limit=limit,
             )
-            serialized_space_payload = json.loads(serialized_space)
-            return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard": {
-                    "dashboard_id": dashboard.dashboard_id,
-                    "display_name": dashboard.display_name,
-                    "path": dashboard.path,
-                    "warehouse_id": dashboard.warehouse_id,
-                },
-                "include_atlan_context": include_atlan_context,
-                "parsed_dashboard": parsed_dashboard,
-                "serialized_space": serialized_space_payload,
-            }
-        except Exception as e:
-            return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard_id": dashboard_id,
-                "include_atlan_context": include_atlan_context,
-                "error": str(e),
-            }
-
-    @mcp_server.tool
-    def create_genie_space_from_dashboard(
-        dashboard_id: str,
-        genie_space_title: str,
-        genie_space_description: str | None = None,
-        user_name_list: list[str] | None = None,
-        warehouse_id: str | None = None,
-        user_permission_level: str = "CAN_MANAGE",
-        include_atlan_context: bool = False,
-        confirmation: str = "",
-    ) -> dict:
-        """
-        Create a Databricks Genie Space from a Lakeview dashboard.
-
-        Args:
-            dashboard_id: Databricks Lakeview dashboard ID.
-            genie_space_title: Title for the new Genie Space.
-            genie_space_description: Optional description for the new Genie Space.
-            user_name_list: Optional users to grant permissions to after creation.
-            warehouse_id: Optional warehouse ID. Defaults to GENIE_SPACE_WAREHOUSE_ID app env var.
-            user_permission_level: Permission granted to user_name_list. CAN_MANAGE, CAN_EDIT, or CAN_READ.
-            include_atlan_context: Whether to include Atlan glossary context in text instructions.
-            confirmation: Must equal CONFIRM CREATE GENIE SPACE FROM DASHBOARD to create the space.
-
-        Returns:
-            dict: Confirmation requirement or created Genie Space details.
-        """
-        users = user_name_list or []
-        safe_dashboard_id = dashboard_id.strip()
-        safe_title = genie_space_title.strip()
-        safe_warehouse_id = (warehouse_id or os.getenv(GENIE_SPACE_WAREHOUSE_ID_ENV) or "").strip()
-
-        if confirmation != CREATE_GENIE_SPACE_FROM_DASHBOARD_CONFIRMATION:
-            return _confirmation_required_payload(
-                required_confirmation=CREATE_GENIE_SPACE_FROM_DASHBOARD_CONFIRMATION,
-                action="create_genie_space_from_dashboard",
-                dashboard_id=safe_dashboard_id,
-                genie_space_title=safe_title,
-                genie_space_description=genie_space_description,
-                user_name_list=users,
-                warehouse_id=safe_warehouse_id,
-                user_permission_level=user_permission_level,
-                include_atlan_context=include_atlan_context,
-            )
-
-        try:
-            if not safe_dashboard_id:
-                raise ValueError("dashboard_id is required")
-            if not safe_title:
-                raise ValueError("genie_space_title is required")
-            if not safe_warehouse_id:
-                raise ValueError(f"warehouse_id is required or set {GENIE_SPACE_WAREHOUSE_ID_ENV}")
-
-            permission = _permission_level(user_permission_level)
-            w = utils.get_user_authenticated_workspace_client()
-            dashboard = w.lakeview.get(dashboard_id=safe_dashboard_id)
-            if not dashboard.serialized_dashboard:
-                raise ValueError("Selected dashboard has no serialized_dashboard attribute")
-            parsed_dashboard = _parse_dashboard_serialized_content(dashboard.serialized_dashboard)
-            serialized_space = _create_serialized_space_from_parsed_dashboard(
-                parsed_dashboard=parsed_dashboard,
-                include_atlan_context=include_atlan_context,
-            )
-            created_space = w.genie.create_space(
-                title=safe_title,
-                warehouse_id=safe_warehouse_id,
-                description=genie_space_description,
-                serialized_space=serialized_space,
-            )
-
-            if users:
-                w.permissions.update(
-                    request_object_type="genie",
-                    request_object_id=created_space.space_id,
-                    access_control_list=[
-                        AccessControlRequest(user_name=user_name, permission_level=permission)
-                        for user_name in users
-                    ],
+            contexts = [
+                _extract_atlan_context_from_asset(
+                    asset=match["asset"],
+                    match_type=match["match_type"],
+                    table_identifier=parsed_identifier["identifier"],
                 )
-
+                for match in matches
+            ]
+            context_texts = [context["context_text"] for context in contexts if context["context_text"]]
             return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard": {
-                    "dashboard_id": dashboard.dashboard_id,
-                    "display_name": dashboard.display_name,
-                    "path": dashboard.path,
-                },
-                "created_space": _serialize_databricks_object(created_space),
-                "user_name_list": users,
-                "user_permission_level": user_permission_level,
-                "warehouse_id": safe_warehouse_id,
-                "include_atlan_context": include_atlan_context,
-                "success": True,
+                "auth_mode": "atlan_api_key",
+                "table_identifier": parsed_identifier["identifier"],
+                "count": len(matches),
+                "contexts": contexts,
+                "combined_context_text": "\n\n".join(context_texts) if context_texts else None,
             }
         except Exception as e:
             return {
-                "auth_mode": "on_behalf_of_user",
-                "dashboard_id": safe_dashboard_id,
-                "genie_space_title": safe_title,
+                "auth_mode": "atlan_api_key",
+                "table_identifier": table_identifier,
                 "error": str(e),
+                "contexts": [],
             }
 
     @mcp_server.tool
