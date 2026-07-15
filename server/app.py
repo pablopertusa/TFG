@@ -17,6 +17,7 @@ over HTTP using the MCP protocol standard.
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastmcp import FastMCP
 
@@ -26,6 +27,13 @@ from .utils import header_store
 mcp_server = FastMCP(name="custom-mcp-server")
 
 STATIC_DIR = Path(__file__).parent / "../static"
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "https://dataos-prod.cloud.databricks.com",
+    "https://mcp-pablo-3337297011599809.aws.databricksapps.com",
+]
 
 # Load and register all tools with the MCP server
 # Tools are defined in server/tools.py
@@ -74,6 +82,14 @@ combined_app = FastAPI(
         *app.routes,  # Your custom API routes (if any)
     ],
     lifespan=mcp_app.lifespan,  # Use MCP's lifespan for proper startup/shutdown
+)
+
+combined_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Export the combined_app for uvicorn to import

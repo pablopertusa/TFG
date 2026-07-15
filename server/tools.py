@@ -16,10 +16,10 @@ import datetime
 import json
 import os
 import time
-from collections import Counter
 from typing import Any
 
 from databricks.sdk.service.iam import AccessControlRequest, PermissionLevel
+from databricks.sdk.service.sql import Disposition, Format, StatementParameterListItem
 
 from server import utils
 
@@ -31,12 +31,115 @@ TERMINAL_JOB_LIFE_CYCLE_STATES = {"TERMINATED", "SKIPPED", "INTERNAL_ERROR"}
 GENIE_SERIALIZATION_JOB_ID_ENV = "GENIE_SERIALIZATION_JOB_ID"
 GENIE_RESTORE_POINTS_JOB_ID_ENV = "GENIE_RESTORE_POINTS_JOB_ID"
 GENIE_RESTORE_JOB_ID_ENV = "GENIE_RESTORE_JOB_ID"
+AUDIT_SQL_WAREHOUSE_ID_ENV = "DATABRICKS_AUDIT_WAREHOUSE_ID"
+GENIE_SPACE_WAREHOUSE_ID_ENV = "GENIE_SPACE_WAREHOUSE_ID"
 ATLAN_API_KEY_ENV = "ATLAN_API_KEY"
 ATLAN_BASE_URL_ENV = "ATLAN_BASE_URL"
 ATLAN_GOLD_QUALIFIED_NAME_PREFIX = "default/databricks/1732657096/lf_udm_prod/gold/"
 ATLAN_METRIC_VIEWS_QUALIFIED_NAME_PREFIX = (
     "default/databricks/1732657096/lf_udm_prod/gold_metric_views/"
 )
+GENIE_USAGE_AUDIT_QUERY = """
+WITH base AS (
+  SELECT
+    a.event_date,
+    DATE_TRUNC('WEEK', a.event_date) AS week_start,
+    DATE_TRUNC('MONTH', a.event_date) AS month_start,
+    CAST(a.request_params.space_id AS STRING) AS space_id,
+    COALESCE(a.user_identity.email, a.user_identity.subject_name) AS user_id,
+    a.action_name,
+    a.request_params.feedback_rating AS feedback_rating
+  FROM system.access.audit a
+  WHERE a.service_name = 'aibiGenie'
+    AND CAST(a.request_params.space_id AS STRING) = :space_id
+)
+
+SELECT
+  'total' AS grain,
+  CAST(NULL AS DATE) AS period_start,
+  COUNT(DISTINCT user_id) AS users,
+  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
+  COUNT(*) AS interactions,
+  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
+  ) AS positive_feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
+  ) AS negative_feedback
+FROM base
+
+UNION ALL
+
+SELECT
+  'daily' AS grain,
+  event_date AS period_start,
+  COUNT(DISTINCT user_id) AS users,
+  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
+  COUNT(*) AS interactions,
+  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
+  ) AS positive_feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
+  ) AS negative_feedback
+FROM base
+GROUP BY event_date
+
+UNION ALL
+
+SELECT
+  'weekly' AS grain,
+  week_start AS period_start,
+  COUNT(DISTINCT user_id) AS users,
+  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
+  COUNT(*) AS interactions,
+  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
+  ) AS positive_feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
+  ) AS negative_feedback
+FROM base
+GROUP BY week_start
+
+UNION ALL
+
+SELECT
+  'monthly' AS grain,
+  month_start AS period_start,
+  COUNT(DISTINCT user_id) AS users,
+  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
+  COUNT(*) AS interactions,
+  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
+  ) AS positive_feedback,
+  COUNT_IF(
+    action_name = 'updateConversationMessageFeedback'
+    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
+  ) AS negative_feedback
+FROM base
+GROUP BY month_start
+
+ORDER BY
+  CASE grain
+    WHEN 'total' THEN 0
+    WHEN 'daily' THEN 1
+    WHEN 'weekly' THEN 2
+    WHEN 'monthly' THEN 3
+  END,
+  period_start
+"""
 
 
 def _serialize_databricks_object(obj: Any) -> dict[str, Any]:
@@ -75,27 +178,10 @@ def _date_from_timestamp(timestamp_ms: int | None) -> str | None:
     return timestamp.date().isoformat()
 
 
-def _sorted_counter(counter: Counter) -> dict:
-    return dict(sorted(counter.items(), key=lambda item: str(item[0])))
-
-
 def _serialize_benchmark_run(run: Any) -> dict[str, Any]:
     run_dict = _serialize_databricks_object(run)
     run_dict["created_date"] = _date_from_timestamp(run_dict.get("created_timestamp"))
     return run_dict
-
-
-def _thumb_key(message: Any) -> str | None:
-    feedback = getattr(message, "feedback", None)
-    if not feedback:
-        return None
-    rating = getattr(feedback, "rating", None)
-    rating_value = getattr(rating, "value", rating)
-    if rating_value == "POSITIVE":
-        return "thumbs_up"
-    if rating_value == "NEGATIVE":
-        return "thumbs_down"
-    return None
 
 
 def _confirmation_required_payload(
@@ -463,6 +549,109 @@ def _extract_atlan_context_from_asset(asset: Any, match_type: str, table_identif
         "terms": terms,
         "context_text": "TERMS CONTEXT\n\n" + "\n\n".join(text_parts) if text_parts else None,
     }
+
+
+def _get_audit_warehouse_id() -> str:
+    warehouse_id = os.getenv(AUDIT_SQL_WAREHOUSE_ID_ENV) or os.getenv(GENIE_SPACE_WAREHOUSE_ID_ENV)
+    if not warehouse_id:
+        raise ValueError(
+            f"Audit SQL warehouse is not configured. Set {AUDIT_SQL_WAREHOUSE_ID_ENV}."
+        )
+    return warehouse_id
+
+
+def _statement_rows(response: Any) -> list[dict[str, Any]]:
+    columns = response.manifest.schema.columns if response.manifest and response.manifest.schema else []
+    column_names = [column.name for column in columns or []]
+    data_array = response.result.data_array if response.result else []
+
+    rows = []
+    for raw_row in data_array or []:
+        row = dict(zip(column_names, raw_row))
+        for key in [
+            "users",
+            "questions_made",
+            "interactions",
+            "feedback",
+            "positive_feedback",
+            "negative_feedback",
+        ]:
+            if row.get(key) is not None:
+                row[key] = int(row[key])
+        rows.append(row)
+    return rows
+
+
+def _statement_state(response: Any) -> str | None:
+    if not response.status or not response.status.state:
+        return None
+    return getattr(response.status.state, "value", response.status.state)
+
+
+def _wait_for_statement_result(
+    client: Any,
+    response: Any,
+    timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> tuple[Any, bool]:
+    safe_timeout_seconds = max(10, min(timeout_seconds, 600))
+    safe_poll_interval_seconds = max(2, min(poll_interval_seconds, 30))
+    deadline = time.monotonic() + safe_timeout_seconds
+
+    while True:
+        state = _statement_state(response)
+        if state in {"SUCCEEDED", "FAILED", "CANCELED", "CLOSED"}:
+            return response, False
+        if not response.statement_id:
+            return response, False
+        if time.monotonic() >= deadline:
+            return response, True
+        time.sleep(safe_poll_interval_seconds)
+        response = client.statement_execution.get_statement(response.statement_id)
+
+
+def _genie_usage_metrics_payload(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    total = next((row for row in rows if row.get("grain") == "total"), None)
+    daily = [row for row in rows if row.get("grain") == "daily"]
+    weekly = [row for row in rows if row.get("grain") == "weekly"]
+    monthly = [row for row in rows if row.get("grain") == "monthly"]
+    return {
+        "total": total,
+        "daily": daily,
+        "weekly": weekly,
+        "monthly": monthly,
+    }
+
+
+def _execute_genie_usage_audit_query(
+    client: Any,
+    space_id: str,
+    timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> tuple[Any, list[dict[str, Any]], bool, str]:
+    warehouse_id = _get_audit_warehouse_id()
+    response = client.statement_execution.execute_statement(
+        statement=GENIE_USAGE_AUDIT_QUERY,
+        warehouse_id=warehouse_id,
+        disposition=Disposition.INLINE,
+        format=Format.JSON_ARRAY,
+        wait_timeout="30s",
+        row_limit=10000,
+        parameters=[
+            StatementParameterListItem(
+                name="space_id",
+                value=space_id,
+                type="STRING",
+            )
+        ],
+    )
+    response, timed_out = _wait_for_statement_result(
+        client=client,
+        response=response,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
+    return response, _statement_rows(response), timed_out, warehouse_id
 
 
 def load_tools(mcp_server):
@@ -922,141 +1111,103 @@ def load_tools(mcp_server):
             }
 
     @mcp_server.tool
-    def get_genie_history_metrics(
+    def get_genie_usage_metrics_from_audit(
         space_id: str,
-        include_all: bool = True,
-        max_conversations: int = 100,
-        max_messages_per_conversation: int = 100,
+        timeout_seconds: int = 180,
+        poll_interval_seconds: int = 5,
     ) -> dict:
         """
-        Get usage and feedback history metrics for a Databricks Genie Space.
+        Get Genie Space usage metrics from system.access.audit.
 
         Args:
             space_id: Databricks Genie Space ID.
-            include_all: Whether to include all conversations instead of only recent conversations.
-            max_conversations: Maximum number of conversations to inspect. Capped at 100.
-            max_messages_per_conversation: Maximum number of messages per conversation. Capped at 100.
+            timeout_seconds: Maximum time to wait for the SQL statement. Capped between 10 and 600.
+            poll_interval_seconds: Polling interval while the SQL statement runs. Capped between 2 and 30.
 
         Returns:
-            dict: Aggregated Genie usage and feedback metrics computed on behalf of the user.
+            dict: Total, daily, and weekly usage metrics for the Genie Space.
         """
         try:
             w = utils.get_user_authenticated_workspace_client()
-            space = w.genie.get_space(space_id=space_id, include_serialized_space=False)
-            safe_conversation_limit = max(1, min(max_conversations, MAX_TOOL_ITEMS))
-            safe_message_limit = max(1, min(max_messages_per_conversation, MAX_TOOL_ITEMS))
-
-            user_names = {
-                str(user.id): user.user_name
-                for user in w.users.list(attributes="id,userName")
-                if user.id and user.user_name
-            }
-            conversations = []
-            response = w.genie.list_conversations(
+            response, rows, timed_out, warehouse_id = _execute_genie_usage_audit_query(
+                client=w,
                 space_id=space_id,
-                include_all=include_all,
-                page_size=50,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
             )
-            conversations.extend(response.conversations or [])
-            while response.next_page_token and len(conversations) < safe_conversation_limit:
-                response = w.genie.list_conversations(
-                    space_id=space_id,
-                    include_all=include_all,
-                    page_size=50,
-                    page_token=response.next_page_token,
-                )
-                conversations.extend(response.conversations or [])
-
-            limited_conversations, conversations_truncated = _limit_items(
-                conversations,
-                safe_conversation_limit,
-            )
-            questions_per_user = Counter()
-            questions_per_day = Counter()
-            questions_per_week = Counter()
-            questions_per_month = Counter()
-            total_thumbs = {"thumbs_up": 0, "thumbs_down": 0}
-            thumbs_per_month = {}
-            total_messages = 0
-            messages_truncated = False
-
-            for conversation in limited_conversations:
-                conversation_id = conversation.conversation_id
-                if not conversation_id:
-                    continue
-                messages = []
-                messages_response = w.genie.list_conversation_messages(
-                    space_id=space_id,
-                    conversation_id=conversation_id,
-                    page_size=50,
-                )
-                messages.extend(messages_response.messages or [])
-                while messages_response.next_page_token and len(messages) < safe_message_limit:
-                    messages_response = w.genie.list_conversation_messages(
-                        space_id=space_id,
-                        conversation_id=conversation_id,
-                        page_size=50,
-                        page_token=messages_response.next_page_token,
-                    )
-                    messages.extend(messages_response.messages or [])
-
-                limited_messages, truncated = _limit_items(messages, safe_message_limit)
-                messages_truncated = messages_truncated or truncated
-                total_messages += len(limited_messages)
-
-                for message in limited_messages:
-                    user_id = getattr(message, "user_id", None)
-                    user_name = (
-                        user_names.get(str(user_id), "unknown") if user_id else "unknown"
-                    )
-                    questions_per_user[user_name] += 1
-
-                    message_datetime = _datetime_from_timestamp(
-                        getattr(message, "created_timestamp", None)
-                    )
-                    month_key = None
-                    if message_datetime:
-                        questions_per_day[message_datetime.date().isoformat()] += 1
-                        iso_year, iso_week, _ = message_datetime.isocalendar()
-                        questions_per_week[f"{iso_year}-W{iso_week:02d}"] += 1
-                        month_key = message_datetime.strftime("%Y-%m")
-                        questions_per_month[month_key] += 1
-
-                    thumb_key = _thumb_key(message)
-                    if thumb_key:
-                        total_thumbs[thumb_key] += 1
-                        if message_datetime and month_key:
-                            if month_key not in thumbs_per_month:
-                                thumbs_per_month[month_key] = {
-                                    "thumbs_up": 0,
-                                    "thumbs_down": 0,
-                                }
-                            thumbs_per_month[month_key][thumb_key] += 1
+            status = _serialize_databricks_object(response.status) if response.status else None
+            if timed_out:
+                return {
+                    "auth_mode": "on_behalf_of_user",
+                    "source": "system.access.audit",
+                    "space_id": space_id,
+                    "warehouse_id": warehouse_id,
+                    "statement_id": response.statement_id,
+                    "timed_out": True,
+                    "status": status,
+                    "message": "Statement did not complete within timeout_seconds.",
+                }
 
             return {
                 "auth_mode": "on_behalf_of_user",
-                "space": _space_summary(space),
-                "limits": {
-                    "include_all": include_all,
-                    "max_conversations": safe_conversation_limit,
-                    "max_messages_per_conversation": safe_message_limit,
-                },
-                "truncated": conversations_truncated or messages_truncated,
-                "inspected_conversations": len(limited_conversations),
-                "inspected_messages": total_messages,
-                "metrics": {
-                    "questions_per_user": _sorted_counter(questions_per_user),
-                    "questions_per_day": _sorted_counter(questions_per_day),
-                    "questions_per_week": _sorted_counter(questions_per_week),
-                    "questions_per_month": _sorted_counter(questions_per_month),
-                    "total_questions_history": total_messages,
-                    "total_thumbs_history": total_thumbs,
-                    "thumbs_per_month": dict(sorted(thumbs_per_month.items())),
-                },
+                "source": "system.access.audit",
+                "space_id": space_id,
+                "warehouse_id": warehouse_id,
+                "statement_id": response.statement_id,
+                "timed_out": False,
+                "status": status,
+                "metrics": _genie_usage_metrics_payload(rows),
             }
         except Exception as e:
             return {
                 "auth_mode": "on_behalf_of_user",
+                "source": "system.access.audit",
+                "space_id": space_id,
+                "error": str(e),
+            }
+
+    @mcp_server.tool
+    def debug_query_genie_usage_audit_rows(
+        space_id: str,
+        timeout_seconds: int = 120,
+        poll_interval_seconds: int = 5,
+    ) -> dict:
+        """
+        Return raw rows for the Genie Space usage metrics query against system.access.audit.
+
+        This tool is intended for debugging the audit aggregation. Prefer
+        get_genie_usage_metrics_from_audit for normal consumers.
+
+        Args:
+            space_id: Databricks Genie Space ID.
+            timeout_seconds: Maximum time to wait for the SQL statement. Capped between 10 and 300.
+            poll_interval_seconds: Polling interval while the SQL statement runs. Capped between 2 and 30.
+
+        Returns:
+            dict: Raw rows returned by the audit aggregation query.
+        """
+        try:
+            w = utils.get_user_authenticated_workspace_client()
+            response, rows, timed_out, warehouse_id = _execute_genie_usage_audit_query(
+                client=w,
+                space_id=space_id,
+                timeout_seconds=timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+            )
+            return {
+                "auth_mode": "on_behalf_of_user",
+                "source": "system.access.audit",
+                "space_id": space_id,
+                "warehouse_id": warehouse_id,
+                "statement_id": response.statement_id,
+                "timed_out": timed_out,
+                "status": _serialize_databricks_object(response.status) if response.status else None,
+                "rows": rows,
+            }
+        except Exception as e:
+            return {
+                "auth_mode": "on_behalf_of_user",
+                "source": "system.access.audit",
                 "space_id": space_id,
                 "error": str(e),
             }

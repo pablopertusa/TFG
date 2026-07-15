@@ -683,53 +683,6 @@ wheels = [
 ]
 
 [[package]]
-name = "custom-mcp-server"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "beautifulsoup4" },
-    { name = "databricks-sdk" },
-    { name = "fastapi" },
-    { name = "fastmcp" },
-    { name = "ipykernel" },
-    { name = "mcp", extra = ["cli"] },
-    { name = "pyatlan" },
-    { name = "pydantic" },
-    { name = "uvicorn" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "databricks-mcp" },
-    { name = "databricks-sdk" },
-    { name = "pytest" },
-    { name = "requests" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "beautifulsoup4", specifier = ">=4.12.0" },
-    { name = "databricks-sdk", specifier = ">=0.60.0" },
-    { name = "fastapi", specifier = ">=0.115.12" },
-    { name = "fastmcp", specifier = ">=2.12.5" },
-    { name = "ipykernel", specifier = ">=7.3.0" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.14.0" },
-    { name = "pyatlan", specifier = "==9.4.0" },
-    { name = "pydantic", specifier = ">=2" },
-    { name = "uvicorn", specifier = ">=0.34.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "databricks-mcp" },
-    { name = "databricks-sdk" },
-    { name = "pytest" },
-    { name = "requests" },
-    { name = "ruff", specifier = ">=0.8.0" },
-]
-
-[[package]]
 name = "cycler"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2024,6 +1977,53 @@ wheels = [
 cli = [
     { name = "python-dotenv" },
     { name = "typer" },
+]
+
+[[package]]
+name = "mcp-pablo"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "databricks-sdk" },
+    { name = "fastapi" },
+    { name = "fastmcp" },
+    { name = "ipykernel" },
+    { name = "mcp", extra = ["cli"] },
+    { name = "pyatlan" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "databricks-mcp" },
+    { name = "databricks-sdk" },
+    { name = "pytest" },
+    { name = "requests" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.12.0" },
+    { name = "databricks-sdk", specifier = ">=0.60.0" },
+    { name = "fastapi", specifier = ">=0.115.12" },
+    { name = "fastmcp", specifier = ">=2.12.5" },
+    { name = "ipykernel", specifier = ">=7.3.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.14.0" },
+    { name = "pyatlan", specifier = "==9.4.0" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "uvicorn", specifier = ">=0.34.2" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "databricks-mcp" },
+    { name = "databricks-sdk" },
+    { name = "pytest" },
+    { name = "requests" },
+    { name = "ruff", specifier = ">=0.8.0" },
 ]
 
 [[package]]

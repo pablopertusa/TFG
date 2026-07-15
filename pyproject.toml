@@ -4,7 +4,7 @@
 # This section defines the basic information about your MCP server package
 
 [project]
-name = "custom-mcp-server"                            # Change this to your server's name
+name = "mcp-pablo"                            # Change this to your server's name
 version = "0.1.0"                                     
 description = "Custom MCP Server on Databricks Apps" 
 readme = "README.md"                                  
@@ -35,11 +35,11 @@ dev = [
 # ============================================================================
 # Command Line Scripts
 # ============================================================================
-# This creates the 'custom-mcp-server' command that runs your server
+# This creates the 'mcp-pablo' command that runs your server
 # Change the command name if you rename your project
 
 [project.scripts]
-custom-mcp-server = "server.main:main"
+mcp-pablo = "server.main:main"
 
 [build-system]
 requires = ["hatchling"]
