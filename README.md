@@ -1,56 +1,113 @@
 # Databricks Genie MCP Tools
 
-MCP server for Databricks Apps that exposes operational tools for Databricks Genie Spaces and Atlan business context lookup.
+MCP server for Databricks Apps that exposes reusable tools for Databricks Genie operations, Atlan business-context lookup, usage monitoring, benchmark inspection, permissions, and Genie lifecycle jobs.
 
-## Features
+The server is intended to be consumed by MCP-compatible agents and clients, including the Databricks working environment used by business users and developers. In that setup, Genie One can use business-facing tools such as Atlan context lookup and Genie usage summaries, while Genie Code can use technical tools for debugging, benchmark inspection, permissions, serialization, and restore workflows.
 
-- Lists and inspects Databricks Genie Spaces available to the authenticated user.
-- Collects Genie usage, feedback, conversation, benchmark, and permission metadata.
-- Starts configured Databricks Jobs for Genie serialization, restore-point discovery, and restore execution.
-- Searches Atlan for assets matching a Databricks table identifier in `catalog.schema.table` format.
-- Returns Atlan glossary/readme context that can be reused by assistants when working with Text-to-SQL assets.
+## Current Scope
 
-## Key Tools
+- Exposes a stateless HTTP MCP endpoint at `/mcp` using FastMCP and FastAPI.
+- Runs locally through the `mcp-pablo` CLI entrypoint and deploys as a Databricks App.
+- Uses Databricks user authentication for user-scoped operations when running in Databricks Apps.
+- Uses configured Databricks Jobs for Genie serialization and restore workflows.
+- Uses Databricks SQL Statement Execution against `system.access.audit` for Genie usage metrics.
+- Uses Atlan API credentials to search Databricks assets and extract glossary/readme context.
 
-- `health`: server health check.
-- `get_current_user`: current Databricks user information.
-- `list_available_genie_spaces`, `get_genie_space_details`, `list_genie_space_tags`: Genie Space discovery.
-- `list_genie_space_conversations`, `list_genie_conversation_messages`, `get_genie_history_metrics`: Genie usage/history inspection.
-- `list_genie_benchmark_runs`, `get_genie_benchmark_run`, `list_genie_benchmark_run_results`, `get_genie_benchmark_result_details`: benchmark inspection.
-- `list_genie_space_permissions`, `grant_space_permissions`: Genie access review and controlled permission grants.
-- `start_genie_serialization_job`, `get_genie_serialization_job_run`: serialization workflow.
-- `list_genie_space_restore_points`, `get_genie_restore_points_job_run`, `start_genie_space_restore_job`, `get_genie_space_restore_job_run`: restore workflow.
-- `find_atlan_assets_by_databricks_table`: find matching Atlan assets for `catalog.schema.table`.
-- `get_atlan_context_for_databricks_table`: extract glossary/readme business context from matching Atlan assets.
+## Tool Groups
+
+### Health And Identity
+
+- `health`: checks that the server is reachable.
+- `get_current_user`: returns the current Databricks user.
+- `get_user_name_from_id`: resolves a Databricks user ID to a username when visible to the caller.
+
+### Genie Discovery
+
+- `list_available_genie_spaces`: lists Genie Spaces available to the authenticated user.
+- `get_genie_space_details`: returns details for one Genie Space.
+- `list_genie_space_tags`: lists custom tags for one Genie Space.
+- `find_genie_spaces_by_tag`: finds Genie Spaces matching a tag key and optional tag value.
+
+### Atlan Context
+
+- `find_atlan_assets_by_databricks_table`: finds Atlan assets matching a Databricks table identifier in `catalog.schema.table` format.
+- `get_atlan_context_for_databricks_table`: extracts assigned glossary terms, descriptions, readmes, and a combined context block from matching Atlan assets.
+
+### Genie Usage And Conversations
+
+- `list_genie_space_conversations`: lists conversations for a Genie Space.
+- `list_genie_conversation_messages`: lists messages for one conversation.
+- `get_genie_usage_metrics_from_audit`: aggregates Genie usage and feedback metrics from `system.access.audit`.
+- `debug_query_genie_usage_audit_rows`: returns raw audit aggregation rows for debugging the audit query.
+
+### Benchmarks
+
+- `list_genie_benchmark_runs`: lists benchmark/evaluation runs for a Genie Space.
+- `get_genie_benchmark_run`: returns one benchmark run.
+- `list_genie_benchmark_run_results`: lists result rows for one benchmark run.
+- `get_genie_benchmark_result_details`: returns detailed information for one benchmark result.
+
+### Permissions
+
+- `list_genie_space_permissions`: lists access-control entries for one Genie Space.
+- `grant_space_permissions`: grants `CAN_MANAGE`, `CAN_EDIT`, or `CAN_READ` after explicit confirmation.
+
+### Serialization And Restore
+
+- `start_genie_serialization_job`: starts the configured serialization job by tag or space ID after explicit confirmation.
+- `get_genie_serialization_job_run`: checks a serialization job run.
+- `list_genie_space_restore_points`: runs the configured job that lists restore points for one Genie Space.
+- `get_genie_restore_points_job_run`: checks a restore-points job run.
+- `start_genie_space_restore_job`: starts the configured restore job for a snapshot date after explicit confirmation.
+- `get_genie_space_restore_job_run`: checks a restore job run.
 
 ## Configuration
 
-The Databricks App uses these environment variables:
+The Databricks App configuration lives in `app.yaml`. Current environment variables are:
 
 - `GENIE_SERIALIZATION_JOB_ID`: Databricks Job used to serialize Genie Spaces.
-- `GENIE_RESTORE_POINTS_JOB_ID`: Databricks Job used to list restore points.
+- `GENIE_RESTORE_POINTS_JOB_ID`: Databricks Job used to list available restore points.
 - `GENIE_RESTORE_JOB_ID`: Databricks Job used to restore a Genie Space snapshot.
+- `GENIE_SPACE_WAREHOUSE_ID`: warehouse used by Genie-space-related workflows that require a SQL warehouse.
+- `DATABRICKS_AUDIT_WAREHOUSE_ID`: warehouse used to query `system.access.audit` for usage metrics.
 - `ATLAN_API_KEY`: Atlan API key, normally provided from a Databricks secret.
 - `ATLAN_BASE_URL`: Atlan tenant URL.
 
+Local development also requires Databricks SDK authentication through the normal Databricks unified authentication flow, such as a configured Databricks CLI profile.
+
 ## Development
 
-Install dependencies and run locally with `uv`:
+Install dependencies:
 
 ```bash
 uv sync
-uv run custom-mcp-server --port 8000
 ```
 
-The MCP endpoint is available at `http://localhost:8000/mcp`.
+Run the server locally:
 
-Run tests:
+```bash
+uv run mcp-pablo --port 8000
+```
+
+The MCP endpoint is available at:
+
+```text
+http://localhost:8000/mcp
+```
+
+The root endpoint `/` serves `static/index.html` when present, otherwise it returns a small health payload.
+
+## Testing
+
+Run the Python integration tests:
 
 ```bash
 uv run pytest tests/
 ```
 
-Optional integration-test environment variables:
+The tests start a local MCP server and use `databricks-mcp` to list and call tools. Tests that require external IDs or credentials skip when the corresponding environment variables are not set.
+
+Useful optional test variables:
 
 - `GENIE_TEST_SPACE_ID`
 - `GENIE_TEST_TAG_KEY`
@@ -61,10 +118,20 @@ Optional integration-test environment variables:
 - `DATABRICKS_TEST_USER_ID`
 - `DATABRICKS_TEST_JOB_RUN_ID`
 - `ATLAN_TEST_TABLE_IDENTIFIER`
+- `PRINT_TOOL_RESULTS=1`
 
-## Authentication
+For local Atlan calls, set `ATLAN_API_KEY` and `ATLAN_BASE_URL`. For audit metrics, set `DATABRICKS_AUDIT_WAREHOUSE_ID` to a warehouse that can query `system.access.audit`.
 
-- Local development uses the default Databricks SDK authentication profile.
-- In Databricks Apps, user-scoped tools call Databricks on behalf of the end user through `x-forwarded-access-token`.
-- Job-oriented tools use the app service principal.
+## Authentication Model
+
+- Local development uses the default Databricks SDK authentication resolution.
+- In Databricks Apps, user-scoped tools authenticate on behalf of the end user through the `x-forwarded-access-token` header captured by middleware.
+- Job-oriented tools use the Databricks app/service-principal context.
 - Atlan tools use `ATLAN_API_KEY` and `ATLAN_BASE_URL`.
+
+## Safety Notes
+
+- Mutating or operationally expensive actions require explicit confirmation strings before execution.
+- Atlan tools return structured context and avoid modifying Atlan assets.
+- Audit metrics query `system.access.audit`; access depends on workspace permissions and warehouse configuration.
+- Secrets should be provided through Databricks secrets or local ignored env files, never committed.
