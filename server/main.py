@@ -3,7 +3,7 @@ Main entry point for the MCP server application.
 
 This module provides the main() function that starts the uvicorn server.
 It's configured as the entry point in pyproject.toml, so you can run the server
-using the command: custom-mcp-server
+using the command: mcp-pablo
 
 The server uses uvicorn (an ASGI server) to serve the FastAPI/FastMCP application.
 """
@@ -25,8 +25,8 @@ def main():
         - port: Configurable via --port argument (default: 8000)
 
     Usage:
-        Run with default port: uv run custom-mcp-server
-        Run with custom port: uv run custom-mcp-server --port 8080
+        Run with default port: uv run mcp-pablo
+        Run with custom port: uv run mcp-pablo --port 8080
     """
     parser = argparse.ArgumentParser(description="Start the MCP server")
     parser.add_argument(

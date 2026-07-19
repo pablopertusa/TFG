@@ -2,7 +2,7 @@
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 echo "=========================================="
 echo "Starting MCP Server - Local Development"
@@ -19,5 +19,5 @@ echo "Step 2: Starting MCP server on http://localhost:8000..."
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-uv run custom-mcp-server
+uv run mcp-pablo
 

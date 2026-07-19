@@ -31,7 +31,7 @@ The server is intended to be consumed by MCP-compatible agents and clients, incl
 ### Atlan Context
 
 - `find_atlan_assets_by_databricks_table`: finds Atlan assets matching a Databricks table identifier in `catalog.schema.table` format.
-- `get_atlan_context_for_databricks_table`: extracts assigned glossary terms, descriptions, readmes, and a combined context block from matching Atlan assets.
+- `get_atlan_context_for_databricks_table`: extracts assigned glossary terms, descriptions, READMEs, and a combined context block from matching Atlan assets.
 
 ### Genie Usage And Conversations
 
