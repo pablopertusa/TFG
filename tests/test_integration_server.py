@@ -60,7 +60,7 @@ def run_mcp_server():
     host = "127.0.0.1"
     port = _find_free_port()
     url = f"http://{host}:{port}"
-    cmd = shlex.split(f"uv run custom-mcp-server --port {port}")
+    cmd = shlex.split(f"uv run mcp-pablo --port {port}")
 
     # Start the process
     proc = subprocess.Popen(
