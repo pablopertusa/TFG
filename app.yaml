@@ -14,4 +14,4 @@ env:
   - name: "GENIE_SPACE_WAREHOUSE_ID"
     value: "09211e379d062f50"
   - name: "DATABRICKS_AUDIT_WAREHOUSE_ID"
-    value: "38cb31e24512fd55"
+    value: "ec025d1d35212eb3"

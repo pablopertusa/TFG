@@ -104,8 +104,9 @@ def test_list_tools(run_mcp_server):
     assert "find_atlan_assets_by_databricks_table" in tool_names
     assert "get_atlan_context_for_databricks_table" in tool_names
     assert "get_user_name_from_id" in tool_names
-    assert "get_genie_usage_metrics_from_audit" in tool_names
-    assert "debug_query_genie_usage_audit_rows" in tool_names
+    assert "get_genie_usage_metrics" in tool_names
+    assert "start_genie_usage_metrics_query" in tool_names
+    assert "get_genie_usage_metrics_query_result" in tool_names
     assert "list_genie_benchmark_runs" in tool_names
     assert "get_genie_benchmark_run" in tool_names
     assert "list_genie_benchmark_run_results" in tool_names
@@ -177,8 +178,8 @@ def test_genie_space_detail_tools(run_mcp_server):
         "list_genie_space_tags",
         "list_genie_space_conversations",
         "list_genie_space_permissions",
-        "get_genie_usage_metrics_from_audit",
-        "debug_query_genie_usage_audit_rows",
+        "get_genie_usage_metrics",
+        "start_genie_usage_metrics_query",
         "list_genie_benchmark_runs",
     ]:
         result = mcp_client.call_tool(tool_name, {"space_id": space_id})

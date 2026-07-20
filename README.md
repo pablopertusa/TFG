@@ -37,8 +37,9 @@ The server is intended to be consumed by MCP-compatible agents and clients, incl
 
 - `list_genie_space_conversations`: lists conversations for a Genie Space.
 - `list_genie_conversation_messages`: lists messages for one conversation.
-- `get_genie_usage_metrics_from_audit`: aggregates Genie usage and feedback metrics from `system.access.audit`.
-- `debug_query_genie_usage_audit_rows`: returns raw audit aggregation rows for debugging the audit query.
+- `get_genie_usage_metrics`: aggregates Genie usage and feedback metrics for a configurable recent-day window, 90 days by default.
+- `start_genie_usage_metrics_query`: starts the usage metrics query and returns a Databricks SQL `statement_id` without waiting for completion.
+- `get_genie_usage_metrics_query_result`: checks a started metrics query and returns metrics once the SQL statement succeeds.
 
 ### Benchmarks
 
@@ -133,5 +134,5 @@ For local Atlan calls, set `ATLAN_API_KEY` and `ATLAN_BASE_URL`. For audit metri
 
 - Mutating or operationally expensive actions require explicit confirmation strings before execution.
 - Atlan tools return structured context and avoid modifying Atlan assets.
-- Audit metrics query `system.access.audit`; access depends on workspace permissions and warehouse configuration.
+- Audit metrics query `system.access.audit`; access depends on workspace permissions and warehouse configuration. The metrics tool filters by `event_date` and defaults to the last 90 days to avoid scanning the full audit table. Pass `lookback_days` to expand or reduce the window.
 - Secrets should be provided through Databricks secrets or local ignored env files, never committed.

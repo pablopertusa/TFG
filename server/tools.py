@@ -19,7 +19,12 @@ import time
 from typing import Any
 
 from databricks.sdk.service.iam import AccessControlRequest, PermissionLevel
-from databricks.sdk.service.sql import Disposition, Format, StatementParameterListItem
+from databricks.sdk.service.sql import (
+    Disposition,
+    ExecuteStatementRequestOnWaitTimeout,
+    Format,
+    StatementParameterListItem,
+)
 
 from server import utils
 
@@ -35,28 +40,37 @@ AUDIT_SQL_WAREHOUSE_ID_ENV = "DATABRICKS_AUDIT_WAREHOUSE_ID"
 GENIE_SPACE_WAREHOUSE_ID_ENV = "GENIE_SPACE_WAREHOUSE_ID"
 ATLAN_API_KEY_ENV = "ATLAN_API_KEY"
 ATLAN_BASE_URL_ENV = "ATLAN_BASE_URL"
+DEFAULT_GENIE_USAGE_LOOKBACK_DAYS = 90
+MAX_GENIE_USAGE_LOOKBACK_DAYS = 3660
 ATLAN_GOLD_QUALIFIED_NAME_PREFIX = "default/databricks/1732657096/lf_udm_prod/gold/"
 ATLAN_METRIC_VIEWS_QUALIFIED_NAME_PREFIX = (
     "default/databricks/1732657096/lf_udm_prod/gold_metric_views/"
 )
-GENIE_USAGE_AUDIT_QUERY = """
+GENIE_USAGE_METRICS_QUERY = """
 WITH base AS (
   SELECT
     a.event_date,
-    DATE_TRUNC('WEEK', a.event_date) AS week_start,
-    DATE_TRUNC('MONTH', a.event_date) AS month_start,
+    CAST(DATE_TRUNC('WEEK', a.event_date) AS DATE) AS week_start,
+    CAST(DATE_TRUNC('MONTH', a.event_date) AS DATE) AS month_start,
     CAST(a.request_params.space_id AS STRING) AS space_id,
     COALESCE(a.user_identity.email, a.user_identity.subject_name) AS user_id,
     a.action_name,
     a.request_params.feedback_rating AS feedback_rating
   FROM system.access.audit a
   WHERE a.service_name = 'aibiGenie'
+    AND a.event_date >= :start_date
+    AND a.event_date <= :end_date
     AND CAST(a.request_params.space_id AS STRING) = :space_id
 )
 
 SELECT
-  'total' AS grain,
-  CAST(NULL AS DATE) AS period_start,
+  CASE
+    WHEN GROUPING(event_date) = 0 THEN 'daily'
+    WHEN GROUPING(week_start) = 0 THEN 'weekly'
+    WHEN GROUPING(month_start) = 0 THEN 'monthly'
+    ELSE 'total'
+  END AS grain,
+  COALESCE(event_date, week_start, month_start) AS period_start,
   COUNT(DISTINCT user_id) AS users,
   COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
   COUNT(*) AS interactions,
@@ -70,66 +84,7 @@ SELECT
     AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
   ) AS negative_feedback
 FROM base
-
-UNION ALL
-
-SELECT
-  'daily' AS grain,
-  event_date AS period_start,
-  COUNT(DISTINCT user_id) AS users,
-  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
-  COUNT(*) AS interactions,
-  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
-  ) AS positive_feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
-  ) AS negative_feedback
-FROM base
-GROUP BY event_date
-
-UNION ALL
-
-SELECT
-  'weekly' AS grain,
-  week_start AS period_start,
-  COUNT(DISTINCT user_id) AS users,
-  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
-  COUNT(*) AS interactions,
-  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
-  ) AS positive_feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
-  ) AS negative_feedback
-FROM base
-GROUP BY week_start
-
-UNION ALL
-
-SELECT
-  'monthly' AS grain,
-  month_start AS period_start,
-  COUNT(DISTINCT user_id) AS users,
-  COUNT_IF(action_name = 'createConversationMessage') AS questions_made,
-  COUNT(*) AS interactions,
-  COUNT_IF(action_name = 'updateConversationMessageFeedback') AS feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_UP'
-  ) AS positive_feedback,
-  COUNT_IF(
-    action_name = 'updateConversationMessageFeedback'
-    AND CAST(feedback_rating AS STRING) = 'THUMBS_DOWN'
-  ) AS negative_feedback
-FROM base
-GROUP BY month_start
+GROUP BY GROUPING SETS ((), (event_date), (week_start), (month_start))
 
 ORDER BY
   CASE grain
@@ -551,13 +506,24 @@ def _extract_atlan_context_from_asset(asset: Any, match_type: str, table_identif
     }
 
 
-def _get_audit_warehouse_id() -> str:
+def _get_usage_metrics_warehouse_id() -> str:
     warehouse_id = os.getenv(AUDIT_SQL_WAREHOUSE_ID_ENV) or os.getenv(GENIE_SPACE_WAREHOUSE_ID_ENV)
     if not warehouse_id:
         raise ValueError(
             f"Audit SQL warehouse is not configured. Set {AUDIT_SQL_WAREHOUSE_ID_ENV}."
         )
     return warehouse_id
+
+
+def _genie_usage_date_range(lookback_days: int) -> dict[str, Any]:
+    safe_lookback_days = max(1, min(lookback_days, MAX_GENIE_USAGE_LOOKBACK_DAYS))
+    end_date = datetime.datetime.now(datetime.timezone.utc).date()
+    start_date = end_date - datetime.timedelta(days=safe_lookback_days - 1)
+    return {
+        "lookback_days": safe_lookback_days,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+    }
 
 
 def _statement_rows(response: Any) -> list[dict[str, Any]]:
@@ -567,7 +533,7 @@ def _statement_rows(response: Any) -> list[dict[str, Any]]:
 
     rows = []
     for raw_row in data_array or []:
-        row = dict(zip(column_names, raw_row))
+        row = dict(zip(column_names, raw_row, strict=False))
         for key in [
             "users",
             "questions_made",
@@ -623,27 +589,55 @@ def _genie_usage_metrics_payload(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _execute_genie_usage_audit_query(
+def _start_genie_usage_metrics_statement(
     client: Any,
     space_id: str,
-    timeout_seconds: int,
-    poll_interval_seconds: int,
-) -> tuple[Any, list[dict[str, Any]], bool, str]:
-    warehouse_id = _get_audit_warehouse_id()
+    lookback_days: int,
+    wait_timeout: str,
+) -> tuple[Any, str, dict[str, Any]]:
+    warehouse_id = _get_usage_metrics_warehouse_id()
+    date_range = _genie_usage_date_range(lookback_days)
     response = client.statement_execution.execute_statement(
-        statement=GENIE_USAGE_AUDIT_QUERY,
+        statement=GENIE_USAGE_METRICS_QUERY,
         warehouse_id=warehouse_id,
         disposition=Disposition.INLINE,
         format=Format.JSON_ARRAY,
-        wait_timeout="30s",
+        wait_timeout=wait_timeout,
+        on_wait_timeout=ExecuteStatementRequestOnWaitTimeout.CONTINUE,
         row_limit=10000,
         parameters=[
+            StatementParameterListItem(
+                name="start_date",
+                value=date_range["start_date"],
+                type="DATE",
+            ),
+            StatementParameterListItem(
+                name="end_date",
+                value=date_range["end_date"],
+                type="DATE",
+            ),
             StatementParameterListItem(
                 name="space_id",
                 value=space_id,
                 type="STRING",
-            )
+            ),
         ],
+    )
+    return response, warehouse_id, date_range
+
+
+def _execute_genie_usage_metrics_query(
+    client: Any,
+    space_id: str,
+    lookback_days: int,
+    timeout_seconds: int,
+    poll_interval_seconds: int,
+) -> tuple[Any, list[dict[str, Any]], bool, str, dict[str, Any]]:
+    response, warehouse_id, date_range = _start_genie_usage_metrics_statement(
+        client=client,
+        space_id=space_id,
+        lookback_days=lookback_days,
+        wait_timeout="10s",
     )
     response, timed_out = _wait_for_statement_result(
         client=client,
@@ -651,7 +645,7 @@ def _execute_genie_usage_audit_query(
         timeout_seconds=timeout_seconds,
         poll_interval_seconds=poll_interval_seconds,
     )
-    return response, _statement_rows(response), timed_out, warehouse_id
+    return response, _statement_rows(response), timed_out, warehouse_id, date_range
 
 
 def load_tools(mcp_server):
@@ -1111,16 +1105,18 @@ def load_tools(mcp_server):
             }
 
     @mcp_server.tool
-    def get_genie_usage_metrics_from_audit(
+    def get_genie_usage_metrics(
         space_id: str,
+        lookback_days: int = DEFAULT_GENIE_USAGE_LOOKBACK_DAYS,
         timeout_seconds: int = 180,
         poll_interval_seconds: int = 5,
     ) -> dict:
         """
-        Get Genie Space usage metrics from system.access.audit.
+        Get Genie Space usage metrics and wait for the SQL statement to complete.
 
         Args:
             space_id: Databricks Genie Space ID.
+            lookback_days: Number of recent days to scan. Capped between 1 and 3660.
             timeout_seconds: Maximum time to wait for the SQL statement. Capped between 10 and 600.
             poll_interval_seconds: Polling interval while the SQL statement runs. Capped between 2 and 30.
 
@@ -1129,23 +1125,42 @@ def load_tools(mcp_server):
         """
         try:
             w = utils.get_user_authenticated_workspace_client()
-            response, rows, timed_out, warehouse_id = _execute_genie_usage_audit_query(
-                client=w,
-                space_id=space_id,
-                timeout_seconds=timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
+            response, rows, timed_out, warehouse_id, date_range = (
+                _execute_genie_usage_metrics_query(
+                    client=w,
+                    space_id=space_id,
+                    lookback_days=lookback_days,
+                    timeout_seconds=timeout_seconds,
+                    poll_interval_seconds=poll_interval_seconds,
+                )
             )
             status = _serialize_databricks_object(response.status) if response.status else None
+            state = _statement_state(response)
             if timed_out:
                 return {
                     "auth_mode": "on_behalf_of_user",
                     "source": "system.access.audit",
                     "space_id": space_id,
                     "warehouse_id": warehouse_id,
+                    "date_range": date_range,
                     "statement_id": response.statement_id,
                     "timed_out": True,
                     "status": status,
-                    "message": "Statement did not complete within timeout_seconds.",
+                    "result_tool": "get_genie_usage_metrics_query_result",
+                    "message": "Statement did not complete within timeout_seconds. Use result_tool with statement_id to fetch it later.",
+                }
+            if state != "SUCCEEDED":
+                return {
+                    "auth_mode": "on_behalf_of_user",
+                    "source": "system.access.audit",
+                    "space_id": space_id,
+                    "warehouse_id": warehouse_id,
+                    "date_range": date_range,
+                    "statement_id": response.statement_id,
+                    "timed_out": False,
+                    "succeeded": False,
+                    "status": status,
+                    "message": "Statement finished without a successful result.",
                 }
 
             return {
@@ -1153,8 +1168,10 @@ def load_tools(mcp_server):
                 "source": "system.access.audit",
                 "space_id": space_id,
                 "warehouse_id": warehouse_id,
+                "date_range": date_range,
                 "statement_id": response.statement_id,
                 "timed_out": False,
+                "succeeded": True,
                 "status": status,
                 "metrics": _genie_usage_metrics_payload(rows),
             }
@@ -1167,48 +1184,88 @@ def load_tools(mcp_server):
             }
 
     @mcp_server.tool
-    def debug_query_genie_usage_audit_rows(
+    def start_genie_usage_metrics_query(
         space_id: str,
-        timeout_seconds: int = 120,
-        poll_interval_seconds: int = 5,
+        lookback_days: int = DEFAULT_GENIE_USAGE_LOOKBACK_DAYS,
     ) -> dict:
         """
-        Return raw rows for the Genie Space usage metrics query against system.access.audit.
-
-        This tool is intended for debugging the audit aggregation. Prefer
-        get_genie_usage_metrics_from_audit for normal consumers.
+        Start a Genie Space usage metrics SQL statement and return quickly. Useful is `get_genie_usage_metrics` times out. 
 
         Args:
             space_id: Databricks Genie Space ID.
-            timeout_seconds: Maximum time to wait for the SQL statement. Capped between 10 and 300.
-            poll_interval_seconds: Polling interval while the SQL statement runs. Capped between 2 and 30.
+            lookback_days: Number of recent days to scan. Capped between 1 and 3660.
 
         Returns:
-            dict: Raw rows returned by the audit aggregation query.
+            dict: Statement ID and status. Use get_genie_usage_metrics_query_result to fetch metrics.
         """
         try:
             w = utils.get_user_authenticated_workspace_client()
-            response, rows, timed_out, warehouse_id = _execute_genie_usage_audit_query(
+            response, warehouse_id, date_range = _start_genie_usage_metrics_statement(
                 client=w,
                 space_id=space_id,
-                timeout_seconds=timeout_seconds,
-                poll_interval_seconds=poll_interval_seconds,
+                lookback_days=lookback_days,
+                wait_timeout="5s",
             )
-            return {
+            state = _statement_state(response)
+            status = _serialize_databricks_object(response.status) if response.status else None
+            payload = {
                 "auth_mode": "on_behalf_of_user",
                 "source": "system.access.audit",
                 "space_id": space_id,
                 "warehouse_id": warehouse_id,
+                "date_range": date_range,
                 "statement_id": response.statement_id,
-                "timed_out": timed_out,
-                "status": _serialize_databricks_object(response.status) if response.status else None,
-                "rows": rows,
+                "done": state in {"SUCCEEDED", "FAILED", "CANCELED", "CLOSED"},
+                "succeeded": state == "SUCCEEDED",
+                "status": status,
+                "result_tool": "get_genie_usage_metrics_query_result",
             }
+            if state == "SUCCEEDED":
+                payload["metrics"] = _genie_usage_metrics_payload(_statement_rows(response))
+            return payload
         except Exception as e:
             return {
                 "auth_mode": "on_behalf_of_user",
                 "source": "system.access.audit",
                 "space_id": space_id,
+                "error": str(e),
+            }
+
+    @mcp_server.tool
+    def get_genie_usage_metrics_query_result(statement_id: str) -> dict:
+        """
+        Fetch the result of a Genie Space usage metrics SQL statement.
+
+        Args:
+            statement_id: Databricks SQL statement ID returned by start_genie_usage_metrics_query
+                or by get_genie_usage_metrics when it times out.
+
+        Returns:
+            dict: Current statement status, plus metrics when the statement has succeeded.
+        """
+        try:
+            w = utils.get_user_authenticated_workspace_client()
+            response = w.statement_execution.get_statement(statement_id)
+            state = _statement_state(response)
+            status = _serialize_databricks_object(response.status) if response.status else None
+            payload = {
+                "auth_mode": "on_behalf_of_user",
+                "source": "system.access.audit",
+                "statement_id": statement_id,
+                "done": state in {"SUCCEEDED", "FAILED", "CANCELED", "CLOSED"},
+                "succeeded": state == "SUCCEEDED",
+                "status": status,
+            }
+            if state == "SUCCEEDED":
+                payload["metrics"] = _genie_usage_metrics_payload(_statement_rows(response))
+            elif state in {"FAILED", "CANCELED", "CLOSED"}:
+                payload["message"] = "Statement finished without a successful result."
+            return payload
+        except Exception as e:
+            return {
+                "auth_mode": "on_behalf_of_user",
+                "source": "system.access.audit",
+                "statement_id": statement_id,
                 "error": str(e),
             }
 
