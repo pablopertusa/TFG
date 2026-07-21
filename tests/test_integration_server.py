@@ -115,6 +115,7 @@ def test_list_tools(run_mcp_server):
     assert "find_genie_spaces_by_tag" in tool_names
     assert "list_genie_space_conversations" in tool_names
     assert "list_genie_conversation_messages" in tool_names
+    assert "list_genie_messages_for_conversations" in tool_names
     assert "list_genie_space_permissions" in tool_names
     assert "start_genie_serialization_job" in tool_names
     assert "get_genie_serialization_job_run" in tool_names
@@ -219,6 +220,13 @@ def test_genie_conversation_messages(run_mcp_server):
         {"space_id": space_id, "conversation_id": conversation_id},
     )
     _print_tool_result("list_genie_conversation_messages", result)
+    assert result is not None
+
+    result = mcp_client.call_tool(
+        "list_genie_messages_for_conversations",
+        {"space_id": space_id, "conversation_ids": [conversation_id]},
+    )
+    _print_tool_result("list_genie_messages_for_conversations", result)
     assert result is not None
 
 

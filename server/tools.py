@@ -29,6 +29,7 @@ from databricks.sdk.service.sql import (
 from server import utils
 
 MAX_TOOL_ITEMS = 100
+MAX_CONVERSATIONS_PER_MESSAGES_REQUEST = 50
 RUN_SERIALIZATION_JOB_CONFIRMATION = "CONFIRM RUN GENIE SERIALIZATION JOB"
 GRANT_SPACE_PERMISSIONS_CONFIRMATION = "CONFIRM GRANT GENIE SPACE PERMISSIONS"
 RESTORE_SNAPSHOT_DATE_FORMAT = "%Y-%m-%d"
@@ -110,6 +111,29 @@ def _serialize_databricks_object(obj: Any) -> dict[str, Any]:
 def _limit_items(items: list[Any], limit: int) -> tuple[list[Any], bool]:
     safe_limit = max(1, min(limit, MAX_TOOL_ITEMS))
     return items[:safe_limit], len(items) > safe_limit
+
+
+def _list_genie_conversation_messages(
+    client: Any,
+    space_id: str,
+    conversation_id: str,
+) -> list[Any]:
+    messages = []
+    response = client.genie.list_conversation_messages(
+        space_id=space_id,
+        conversation_id=conversation_id,
+        page_size=50,
+    )
+    messages.extend(response.messages or [])
+    while response.next_page_token:
+        response = client.genie.list_conversation_messages(
+            space_id=space_id,
+            conversation_id=conversation_id,
+            page_size=50,
+            page_token=response.next_page_token,
+        )
+        messages.extend(response.messages or [])
+    return messages
 
 
 def _space_summary(space: Any) -> dict[str, Any]:
@@ -1070,21 +1094,11 @@ def load_tools(mcp_server):
         try:
             w = utils.get_user_authenticated_workspace_client()
             space = w.genie.get_space(space_id=space_id, include_serialized_space=False)
-            messages = []
-            response = w.genie.list_conversation_messages(
+            messages = _list_genie_conversation_messages(
+                client=w,
                 space_id=space_id,
                 conversation_id=conversation_id,
-                page_size=50,
             )
-            messages.extend(response.messages or [])
-            while response.next_page_token:
-                response = w.genie.list_conversation_messages(
-                    space_id=space_id,
-                    conversation_id=conversation_id,
-                    page_size=50,
-                    page_token=response.next_page_token,
-                )
-                messages.extend(response.messages or [])
 
             limited, truncated = _limit_items(messages, limit)
             return {
@@ -1101,6 +1115,77 @@ def load_tools(mcp_server):
                 "auth_mode": "on_behalf_of_user",
                 "space_id": space_id,
                 "conversation_id": conversation_id,
+                "error": str(e),
+            }
+
+    @mcp_server.tool
+    def list_genie_messages_for_conversations(
+        space_id: str,
+        conversation_ids: list[str],
+        limit_per_conversation: int = 50,
+    ) -> dict:
+        """
+        List messages for multiple Databricks Genie conversations available to the authenticated user.
+
+        Args:
+            space_id: Databricks Genie Space ID.
+            conversation_ids: Databricks Genie conversation IDs. Capped at 50 conversations.
+            limit_per_conversation: Maximum messages to return per conversation. Capped at 100.
+
+        Returns:
+            dict: Messages grouped by conversation, with partial errors per conversation.
+        """
+        try:
+            w = utils.get_user_authenticated_workspace_client()
+            space = w.genie.get_space(space_id=space_id, include_serialized_space=False)
+            safe_conversation_ids = conversation_ids[
+                :MAX_CONVERSATIONS_PER_MESSAGES_REQUEST
+            ]
+            results = []
+            for conversation_id in safe_conversation_ids:
+                try:
+                    messages = _list_genie_conversation_messages(
+                        client=w,
+                        space_id=space_id,
+                        conversation_id=conversation_id,
+                    )
+                    limited, truncated = _limit_items(messages, limit_per_conversation)
+                    results.append(
+                        {
+                            "conversation_id": conversation_id,
+                            "count": len(messages),
+                            "returned_count": len(limited),
+                            "truncated": truncated,
+                            "messages": [
+                                _serialize_databricks_object(message)
+                                for message in limited
+                            ],
+                        }
+                    )
+                except Exception as e:
+                    results.append(
+                        {
+                            "conversation_id": conversation_id,
+                            "error": str(e),
+                        }
+                    )
+
+            return {
+                "auth_mode": "on_behalf_of_user",
+                "space": _space_summary(space),
+                "conversation_count": len(conversation_ids),
+                "returned_conversation_count": len(safe_conversation_ids),
+                "truncated": len(conversation_ids) > len(safe_conversation_ids),
+                "limit_per_conversation": max(
+                    1, min(limit_per_conversation, MAX_TOOL_ITEMS)
+                ),
+                "results": results,
+            }
+        except Exception as e:
+            return {
+                "auth_mode": "on_behalf_of_user",
+                "space_id": space_id,
+                "conversation_ids": conversation_ids,
                 "error": str(e),
             }
 
@@ -1189,7 +1274,8 @@ def load_tools(mcp_server):
         lookback_days: int = DEFAULT_GENIE_USAGE_LOOKBACK_DAYS,
     ) -> dict:
         """
-        Start a Genie Space usage metrics SQL statement and return quickly. Useful is `get_genie_usage_metrics` times out. 
+        Start a Genie Space usage metrics SQL statement and return quickly. This is the recommended way of retrieving usage data. 
+        Useful is `get_genie_usage_metrics` times out. 
 
         Args:
             space_id: Databricks Genie Space ID.
