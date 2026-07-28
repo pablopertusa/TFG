@@ -672,6 +672,11 @@ def _execute_genie_usage_metrics_query(
     return response, _statement_rows(response), timed_out, warehouse_id, date_range
 
 
+""" ------------------------------------------------------- """
+"""                 ALL TOOLS AVAILABLE                     """
+""" ------------------------------------------------------- """
+
+
 def load_tools(mcp_server):
     """
     Register all MCP tools with the server.
