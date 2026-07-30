@@ -78,11 +78,13 @@ Local development also requires Databricks SDK authentication through the normal
 
 ## Development
 
-Install dependencies:
+Create or synchronize the single project virtual environment:
 
 ```bash
 uv sync
 ```
+
+All server, agent, test, and tracing dependencies are declared in `pyproject.toml`, resolved in `uv.lock`, and installed in `.venv`. The development scripts do not create separate environments or install packages themselves.
 
 Run the server locally:
 
@@ -122,6 +124,43 @@ Useful optional test variables:
 - `PRINT_TOOL_RESULTS=1`
 
 For local Atlan calls, set `ATLAN_API_KEY` and `ATLAN_BASE_URL`. For audit metrics, set `DATABRICKS_AUDIT_WAREHOUSE_ID` to a warehouse that can query `system.access.audit`.
+
+### Local Agent
+
+`scripts/dev/local_agent.py` runs a manual agent loop locally, queries a Databricks-hosted model, and connects directly to the local MCP endpoint.
+
+Start the MCP server in one terminal:
+
+```bash
+DATABRICKS_CONFIG_PROFILE=<profile> uv run mcp-pablo --port 8000
+```
+
+Run the agent in another terminal:
+
+```bash
+uv run scripts/dev/local_agent.py --profile <profile> --require-tool
+```
+
+All MCP tools are exposed to the model by default. Use `--tools tool_a,tool_b` to restrict the agent to an explicit allowlist. The complete default set includes tools that grant permissions or start serialization and restore jobs; those tools retain their server-side confirmation requirements.
+
+An equivalent implementation using OpenAI Agents SDK for the agent loop and MCP integration is also available:
+
+```bash
+uv run scripts/dev/local_agent_agents_sdk.py --profile <profile> --require-tool
+```
+
+The Agents SDK implementation enables MLflow tracing by default. It logs the complete agent run, model calls, token usage, estimated model cost, latency, tool definitions, and MCP tool inputs and outputs to Databricks. If no experiment is configured, it creates or uses `/Users/<current-user>/mcp-local-agent`.
+
+Select an existing experiment by ID or path:
+
+```bash
+uv run scripts/dev/local_agent_agents_sdk.py \
+  --profile <profile> \
+  --experiment-id <experiment-id> \
+  --require-tool
+```
+
+Use `--experiment-name <workspace-path>` instead of `--experiment-id`, or `--no-tracing` to run without MLflow. Costs are estimates derived from token usage and the MLflow model-price catalog, not billing records.
 
 ## Authentication Model
 
