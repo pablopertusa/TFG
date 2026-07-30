@@ -197,9 +197,9 @@ async def run_agent(
         agent_model = OpenAIChatCompletionsModel(model=model, openai_client=model_client)
         async with MCPServerStreamableHttp(
             name="local-genie-mcp",
-            params={"url": mcp_url, "timeout": 20},
+            params={"url": mcp_url, "timeout": 60},
             cache_tools_list=True,
-            client_session_timeout_seconds=20,
+            client_session_timeout_seconds=60,
             tool_filter=_tool_filter(allowed_tool_names),
         ) as mcp_server:
             agent = Agent(
