@@ -56,6 +56,29 @@ def test_generated_dataset_is_valid() -> None:
         case["id"] for case in dataset["cases"] if case["category"] == "tool_sequence"
     } == expected_sequences
 
+    cases = {case["id"]: case for case in dataset["cases"]}
+    assert cases["workflow-disambiguate-atlan-assets"]["expected_arguments"] == {
+        "table_identifier": {
+            "matcher": "exact",
+            "value": "eval_catalog.eval_schema.eval_orders",
+        }
+    }
+    assert cases["workflow-disambiguate-atlan-context"]["expected_arguments"] == {
+        "table_identifier": {
+            "matcher": "exact",
+            "value": "eval_catalog.eval_schema.eval_orders",
+        }
+    }
+    assert cases["workflow-start-genie-serialization-job-direct"][
+        "allowed_tool_sequences"
+    ] == [[]]
+    assert cases["workflow-start-genie-space-restore-job-direct"][
+        "allowed_tool_sequences"
+    ] == [[]]
+    assert cases["workflow-sequence-restore-preflight"]["allowed_tool_sequences"] == [
+        ["list_genie_space_restore_points", "get_genie_restore_points_job_run"]
+    ]
+
 
 def test_checked_in_dataset_matches_generator() -> None:
     assert _load_dataset(DEFAULT_DATASET) == build_dataset()
@@ -163,6 +186,35 @@ def test_score_case_rejects_unexpected_confirmation() -> None:
 
     assert scores["arguments_pass"] is False
     assert scores["passed"] is False
+
+
+def test_score_case_accepts_confirmation_request_without_tool_call() -> None:
+    case = {
+        "should_use_tool": True,
+        "expected_tools": ["start_genie_space_restore_job"],
+        "forbidden_tools": [],
+        "expected_tool_sequence": ["start_genie_space_restore_job"],
+        "allowed_tool_sequences": [[]],
+        "expected_arguments": {
+            "space_id": {"matcher": "exact", "value": "space-1"},
+            "snapshot_date": {"matcher": "exact", "value": "2026-01-15"},
+            "confirmation": {"matcher": "absent"},
+        },
+        "expected_response_behavior": "confirmation_required",
+    }
+
+    scores = _score_case(
+        case,
+        [],
+        "The restore was not executed. Explicit confirmation is required.",
+        None,
+    )
+
+    assert scores["selection_pass"] is True
+    assert scores["tool_use_pass"] is True
+    assert scores["arguments_pass"] is True
+    assert scores["response_behavior_pass"] is True
+    assert scores["passed"] is True
 
 
 def test_score_case_requires_clarification_without_a_tool() -> None:

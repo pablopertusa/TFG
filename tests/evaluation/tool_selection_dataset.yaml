@@ -1,4 +1,4 @@
-version: 3
+version: 4
 name: mcp_workflow_tool_selection_50
 description: Fifty curated English workflow cases for 18 MCP tools covering Atlan, conversations, usage, benchmarks,
   serialization, and restore flows.
@@ -598,7 +598,8 @@ cases:
   - start_genie_space_restore_job
   expected_tool_sequence:
   - start_genie_serialization_job
-  allowed_tool_sequences: []
+  allowed_tool_sequences:
+  - []
   should_use_tool: true
   expected_arguments:
     space_id:
@@ -692,7 +693,8 @@ cases:
   - list_genie_space_restore_points
   expected_tool_sequence:
   - start_genie_space_restore_job
-  allowed_tool_sequences: []
+  allowed_tool_sequences:
+  - []
   should_use_tool: true
   expected_arguments:
     space_id:
@@ -747,9 +749,6 @@ cases:
     table_identifier:
       matcher: exact
       value: eval_catalog.eval_schema.eval_orders
-    limit:
-      matcher: exact
-      value: 5
   expected_response_behavior: answer
 - id: workflow-disambiguate-atlan-context
   category: disambiguation
@@ -773,9 +772,6 @@ cases:
     table_identifier:
       matcher: exact
       value: eval_catalog.eval_schema.eval_orders
-    limit:
-      matcher: exact
-      value: 1
   expected_response_behavior: answer
 - id: workflow-disambiguate-single-conversation
   category: disambiguation
@@ -1541,7 +1537,9 @@ cases:
   - list_genie_space_restore_points
   - get_genie_restore_points_job_run
   - start_genie_space_restore_job
-  allowed_tool_sequences: []
+  allowed_tool_sequences:
+  - - list_genie_space_restore_points
+    - get_genie_restore_points_job_run
   should_use_tool: true
   expected_arguments:
     list_genie_space_restore_points:

@@ -37,6 +37,7 @@ The server is intended to be consumed by MCP-compatible agents and clients, incl
 
 - `list_genie_space_conversations`: lists conversations for a Genie Space.
 - `list_genie_conversation_messages`: lists messages for one conversation.
+- `list_genie_messages_for_conversations`: lists messages for several conversations in one call.
 - `get_genie_usage_metrics`: aggregates Genie usage and feedback metrics for a configurable recent-day window, 90 days by default.
 - `start_genie_usage_metrics_query`: starts the usage metrics query and returns a Databricks SQL `statement_id` without waiting for completion.
 - `get_genie_usage_metrics_query_result`: checks a started metrics query and returns metrics once the SQL statement succeeds.
@@ -125,9 +126,61 @@ Useful optional test variables:
 
 For local Atlan calls, set `ATLAN_API_KEY` and `ATLAN_BASE_URL`. For audit metrics, set `DATABRICKS_AUDIT_WAREHOUSE_ID` to a warehouse that can query `system.access.audit`.
 
+### Tool-Selection Evaluation
+
+`tests/evaluation/tool_selection_dataset.yaml` is the editable evaluation dataset for the 18 MCP tools in the expected Atlan, conversation/message, usage-metrics, benchmark, serialization, and restore flows. It contains 50 curated English workplace cases: 18 direct requests, 8 disambiguations, 8 missing-information requests, 6 no-tool tasks, and 10 multi-tool workflows. Its initial `review_status` is `pending_user_review`; review and edit the prompts and expectations before treating results as a stable benchmark.
+
+The complete benchmark methodology, dataset schema, safety model, execution workflow, outputs, and interpretation guidance are documented in [`docs/tool-selection-benchmark.md`](docs/tool-selection-benchmark.md).
+
+Regenerate the initial dataset from the curated profiles when intentionally replacing local edits:
+
+```bash
+uv run python tests/evaluation/generate_tool_selection_dataset.py
+```
+
+Validate the dataset and filters without opening MCP or model connections:
+
+```bash
+uv run python tests/evaluation/run_tool_selection_eval.py --dry-run
+```
+
+For a model-backed evaluation, start the local MCP server and run the evaluator with the same Databricks profile in another terminal:
+
+```bash
+DATABRICKS_CONFIG_PROFILE=<profile> uv run mcp-pablo --port 8000
+uv run python tests/evaluation/run_tool_selection_eval.py --profile <profile>
+```
+
+The benchmark defaults to the cost-optimized `databricks-gpt-5-4-mini` endpoint. Override it without modifying the dataset when comparing another model:
+
+```bash
+uv run python tests/evaluation/run_tool_selection_eval.py \
+  --profile <profile> \
+  --model databricks-gpt-5-4-nano
+```
+
+The evaluator fetches the live tool names, descriptions, and input schemas from MCP, but overrides every tool call with the dataset's synthetic fixture. It never forwards tool execution to Databricks, Atlan, SQL, Jobs, permission, serialization, or restore APIs. It also rejects datasets that do not explicitly set `real_tool_execution: false` or whose synthetic/live tool inventories do not match.
+
+Use repeatable filters for focused or inexpensive runs:
+
+```bash
+uv run python tests/evaluation/run_tool_selection_eval.py \
+  --profile <profile> \
+  --category disambiguation \
+  --tool get_genie_usage_metrics \
+  --tag confusion \
+  --limit 5
+```
+
+Supported filters are `--case-id`, `--category`, `--tool`, and `--tag`. By default, JSONL case records and a JSON summary are written under the versionable `tests/evaluation/results/` directory. Each case records the prompt, expectations, available tools, selected tools and arguments, synthetic outputs, final answer, errors, configured and observed retries, latency, token usage, scores, and MLflow trace details. The summary includes aggregate scores, estimated cost, category/tool breakdowns, the full live tool definitions, and dataset/schema hashes.
+
+MLflow tracing is enabled by default under `/Users/<current-user>/mcp-tool-selection-eval`. Use `--experiment-id`, `--experiment-name`, or `--no-tracing` as needed. Costs are MLflow estimates rather than billing records.
+
+The runner exits with a non-zero status if any selected case fails or errors. Add `--fail-fast` to stop after the first scored failure; the summary reports selected, executed, and skipped counts.
+
 ### Local Agent
 
-`scripts/dev/local_agent.py` runs a manual agent loop locally, queries a Databricks-hosted model, and connects directly to the local MCP endpoint.
+`scripts/dev/local_agent.py` uses OpenAI Agents SDK to run an agent locally, query a Databricks-hosted model, and connect directly to the local MCP endpoint.
 
 Start the MCP server in one terminal:
 
@@ -143,18 +196,12 @@ uv run scripts/dev/local_agent.py --profile <profile> --require-tool
 
 All MCP tools are exposed to the model by default. Use `--tools tool_a,tool_b` to restrict the agent to an explicit allowlist. The complete default set includes tools that grant permissions or start serialization and restore jobs; those tools retain their server-side confirmation requirements.
 
-An equivalent implementation using OpenAI Agents SDK for the agent loop and MCP integration is also available:
-
-```bash
-uv run scripts/dev/local_agent_agents_sdk.py --profile <profile> --require-tool
-```
-
-The Agents SDK implementation enables MLflow tracing by default. It logs the complete agent run, model calls, token usage, estimated model cost, latency, tool definitions, and MCP tool inputs and outputs to Databricks. If no experiment is configured, it creates or uses `/Users/<current-user>/mcp-local-agent`.
+MLflow tracing is enabled by default. It logs the complete agent run, model calls, token usage, estimated model cost, latency, tool definitions, and MCP tool inputs and outputs to Databricks. If no experiment is configured, it creates or uses `/Users/<current-user>/mcp-local-agent`.
 
 Select an existing experiment by ID or path:
 
 ```bash
-uv run scripts/dev/local_agent_agents_sdk.py \
+uv run scripts/dev/local_agent.py \
   --profile <profile> \
   --experiment-id <experiment-id> \
   --require-tool

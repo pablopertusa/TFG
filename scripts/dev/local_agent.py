@@ -1,20 +1,31 @@
 import argparse
 import asyncio
-import json
 import os
 from typing import Any
 
+import mlflow
+from agents import (
+    Agent,
+    ModelSettings,
+    OpenAIChatCompletionsModel,
+    Runner,
+    ToolCallItem,
+    ToolCallOutputItem,
+    set_tracing_disabled,
+)
+from agents.mcp import MCPServerStreamableHttp, create_static_tool_filter
 from databricks.sdk import WorkspaceClient
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mlflow.entities import SpanType
 from openai import AsyncOpenAI
+
+from server.agent_config import AGENT_INSTRUCTIONS
 
 DEFAULT_PROMPT = "Comprueba mediante la herramienta health que el servidor MCP local funciona."
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a local agent against a Databricks model and a local MCP server."
+        description="Run an OpenAI Agents SDK agent with a Databricks model and local MCP."
     )
     parser.add_argument("prompt", nargs="*", help="Question or instruction for the agent")
     parser.add_argument(
@@ -43,6 +54,21 @@ def _parse_args() -> argparse.Namespace:
         help="Require the model to call a tool on its first turn",
     )
     parser.add_argument("--max-turns", type=int, default=4)
+    parser.add_argument(
+        "--experiment-id",
+        default=os.getenv("MLFLOW_EXPERIMENT_ID"),
+        help="Existing Databricks MLflow experiment ID",
+    )
+    parser.add_argument(
+        "--experiment-name",
+        default=os.getenv("MLFLOW_EXPERIMENT_NAME"),
+        help="Databricks MLflow experiment path; defaults to the current user's home",
+    )
+    parser.add_argument(
+        "--no-tracing",
+        action="store_true",
+        help="Disable MLflow tracing for this execution",
+    )
     return parser.parse_args()
 
 
@@ -63,42 +89,91 @@ def _databricks_openai_client(workspace_client: WorkspaceClient) -> AsyncOpenAI:
     )
 
 
-def _normalize_schema(value: Any) -> Any:
-    if isinstance(value, list):
-        return [_normalize_schema(item) for item in value]
-    if not isinstance(value, dict):
-        return value
+def _configure_mlflow(
+    profile: str | None,
+    user_name: str,
+    experiment_id: str | None,
+    experiment_name: str | None,
+) -> None:
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if not tracking_uri:
+        tracking_uri = f"databricks://{profile}" if profile else "databricks"
 
-    normalized = {key: _normalize_schema(item) for key, item in value.items() if key != "anyOf"}
-    if "anyOf" not in value:
-        return normalized
+    mlflow.set_tracking_uri(tracking_uri)
+    if experiment_id:
+        experiment = mlflow.set_experiment(experiment_id=experiment_id)
+    else:
+        experiment = mlflow.set_experiment(
+            experiment_name=experiment_name or f"/Users/{user_name}/mcp-local-agent"
+        )
 
-    choices = value["anyOf"]
-    non_null_choices = [choice for choice in choices if choice.get("type") != "null"]
-    if len(non_null_choices) != 1 or len(non_null_choices) == len(choices):
-        raise ValueError(f"Unsupported MCP tool schema: {json.dumps(value)}")
-
-    normalized.pop("default", None)
-    return {**_normalize_schema(non_null_choices[0]), **normalized}
-
-
-def _openai_tool(tool: Any) -> dict[str, Any]:
-    schema = _normalize_schema(dict(tool.inputSchema or {}))
-    schema.setdefault("type", "object")
-    schema.setdefault("properties", {})
-    return {
-        "type": "function",
-        "function": {
-            "name": tool.name,
-            "description": tool.description or "",
-            "parameters": schema,
-        },
-    }
+    # Replace the default OpenAI exporter with MLflow's Agents SDK trace processor.
+    mlflow.openai.autolog(disable_openai_agent_tracer=True)
+    print(f"MLflow: {experiment.name} (experiment ID: {experiment.experiment_id})")
 
 
-def _tool_result_text(result: Any) -> str:
-    payload = result.model_dump(mode="json", by_alias=True, exclude_none=True)
-    return json.dumps(payload, ensure_ascii=False)
+def _tool_filter(tool_names: set[str]):
+    if "*" in tool_names:
+        return None
+    return create_static_tool_filter(allowed_tool_names=sorted(tool_names))
+
+
+def _tool_call_name(item: ToolCallItem) -> str:
+    raw_item = item.raw_item
+    name = getattr(raw_item, "name", None)
+    if name:
+        return name
+
+    function = getattr(raw_item, "function", None)
+    return getattr(function, "name", "unknown")
+
+
+def _print_run_items(items: list[Any]) -> None:
+    for item in items:
+        if isinstance(item, ToolCallItem):
+            print(f"\n[MCP call] {_tool_call_name(item)}")
+        elif isinstance(item, ToolCallOutputItem):
+            print(f"[MCP result] {item.output}")
+
+
+def _print_trace_summary(trace_id: str | None) -> None:
+    if not trace_id:
+        print("\nMLflow trace: not available")
+        return
+
+    mlflow.flush_trace_async_logging()
+    try:
+        trace = mlflow.get_trace(trace_id=trace_id)
+    except Exception as exc:
+        print(f"\nMLflow trace: {trace_id} (summary unavailable: {exc})")
+        return
+
+    print(f"\nMLflow trace: {trace.info.trace_id}")
+    if trace.info.execution_duration is not None:
+        print(f"Latency: {trace.info.execution_duration / 1000:.3f} s")
+
+    if usage := trace.info.token_usage:
+        print(
+            "Tokens: "
+            f"input={usage['input_tokens']}, "
+            f"output={usage['output_tokens']}, "
+            f"total={usage['total_tokens']}"
+        )
+    else:
+        print("Tokens: not available")
+
+    if cost := trace.info.cost:
+        print(
+            "Estimated model cost: "
+            f"input=${cost['input_cost']:.6f}, "
+            f"output=${cost['output_cost']:.6f}, "
+            f"total=${cost['total_cost']:.6f}"
+        )
+    else:
+        print("Estimated model cost: not available")
+
+    called_tools = [span.name for span in trace.search_spans(span_type=SpanType.TOOL)]
+    print(f"Tools called: {', '.join(called_tools) if called_tools else 'none'}")
 
 
 async def run_agent(
@@ -109,74 +184,52 @@ async def run_agent(
     allowed_tool_names: set[str],
     require_tool: bool,
     max_turns: int,
-) -> str:
+    tracing_enabled: bool,
+    experiment_id: str | None,
+    experiment_name: str | None,
+) -> tuple[str, str | None]:
     workspace_client = _workspace_client(profile)
-    workspace_client.current_user.me()
+    current_user = workspace_client.current_user.me()
+    if tracing_enabled:
+        _configure_mlflow(profile, current_user.user_name, experiment_id, experiment_name)
+    else:
+        set_tracing_disabled(True)
 
-    async with (
-        _databricks_openai_client(workspace_client) as model_client,
-        streamablehttp_client(mcp_url) as (read_stream, write_stream, _),
-        ClientSession(read_stream, write_stream) as mcp_session,
-    ):
-        await mcp_session.initialize()
-        listed_tools = (await mcp_session.list_tools()).tools
-        if "*" in allowed_tool_names:
-            selected_tools = listed_tools
-        else:
-            selected_tools = [tool for tool in listed_tools if tool.name in allowed_tool_names]
-            missing_tools = allowed_tool_names - {tool.name for tool in selected_tools}
-            if missing_tools:
-                raise ValueError(f"MCP tools not found: {', '.join(sorted(missing_tools))}")
+    async with _databricks_openai_client(workspace_client) as model_client:
+        agent_model = OpenAIChatCompletionsModel(model=model, openai_client=model_client)
+        async with MCPServerStreamableHttp(
+            name="local-genie-mcp",
+            params={"url": mcp_url, "timeout": 60},
+            cache_tools_list=True,
+            client_session_timeout_seconds=60,
+            tool_filter=_tool_filter(allowed_tool_names),
+        ) as mcp_server:
+            available_tool_names = {tool.name for tool in await mcp_server.list_tools()}
+            if "*" not in allowed_tool_names:
+                missing_tools = allowed_tool_names - available_tool_names
+                if missing_tools:
+                    raise ValueError(f"MCP tools not found: {', '.join(sorted(missing_tools))}")
 
-        tool_specs = [_openai_tool(tool) for tool in selected_tools]
-        selected_tool_names = {tool.name for tool in selected_tools}
-        messages: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a local agent with access to MCP tools. Use the tools when needed, "
-                    "never invent their results, and answer in the user's language."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ]
-
-        print(f"Model: {model}")
-        print(f"MCP: {mcp_url}")
-        print(f"Tools: {', '.join(tool.name for tool in selected_tools)}")
-
-        for turn in range(max_turns):
-            response = await model_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=tool_specs,
-                tool_choice="required" if require_tool and turn == 0 else "auto",
+            agent = Agent(
+                name="Local Databricks MCP agent",
+                instructions=AGENT_INSTRUCTIONS,
+                model=agent_model,
+                mcp_servers=[mcp_server],
+                model_settings=ModelSettings(tool_choice="required" if require_tool else "auto"),
             )
-            message = response.choices[0].message
-            messages.append(message.model_dump(exclude_none=True))
 
-            if not message.tool_calls:
-                return message.content or ""
+            print(f"Model: {model}")
+            print(f"MCP: {mcp_url}")
+            print(
+                "Tools: all"
+                if "*" in allowed_tool_names
+                else f"Tools: {', '.join(sorted(available_tool_names))}"
+            )
 
-            for tool_call in message.tool_calls:
-                tool_name = tool_call.function.name
-                if tool_name not in selected_tool_names:
-                    raise RuntimeError(f"Model requested a tool outside the allowlist: {tool_name}")
-
-                arguments = json.loads(tool_call.function.arguments or "{}")
-                print(f"\n[MCP call] {tool_name}({json.dumps(arguments, ensure_ascii=False)})")
-                result = await mcp_session.call_tool(tool_name, arguments)
-                result_text = _tool_result_text(result)
-                print(f"[MCP result] {result_text}")
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result_text,
-                    }
-                )
-
-    raise RuntimeError(f"Agent did not finish after {max_turns} turns")
+            result = await Runner.run(agent, prompt, max_turns=max_turns)
+            _print_run_items(result.new_items)
+            trace_id = mlflow.get_last_active_trace_id() if tracing_enabled else None
+            return result.final_output, trace_id
 
 
 async def _main() -> None:
@@ -186,7 +239,7 @@ async def _main() -> None:
     if not allowed_tools:
         raise ValueError("At least one tool must be provided with --tools")
 
-    answer = await run_agent(
+    answer, trace_id = await run_agent(
         prompt=prompt,
         model=args.model,
         profile=args.profile,
@@ -194,8 +247,13 @@ async def _main() -> None:
         allowed_tool_names=allowed_tools,
         require_tool=args.require_tool,
         max_turns=args.max_turns,
+        tracing_enabled=not args.no_tracing,
+        experiment_id=args.experiment_id,
+        experiment_name=args.experiment_name,
     )
     print(f"\nAgent: {answer}")
+    if not args.no_tracing:
+        _print_trace_summary(trace_id)
 
 
 if __name__ == "__main__":

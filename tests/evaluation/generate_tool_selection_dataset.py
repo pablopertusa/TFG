@@ -687,6 +687,7 @@ def _direct_cases() -> list[dict[str, Any]]:
             should_use_tool=True,
             expected_arguments=_expected_tool_arguments(name, spec["arguments"]),
             expected_sequence=[name],
+            allowed_sequences=[[]] if name in CONFIRMATION_GATED_TOOLS else None,
             tags=["positive", "workflow"],
         )
         for name, spec in DIRECT_CASE_SPECS.items()
@@ -699,14 +700,14 @@ def _disambiguation_cases() -> list[dict[str, Any]]:
             "workflow-disambiguate-atlan-assets",
             f"We are reconciling catalog records for `{TABLE_ID}`. Return the matching Atlan assets and their GUIDs; do not build a business-context summary yet.",
             "find_atlan_assets_by_databricks_table",
-            {"table_identifier": TABLE_ID, "limit": 5},
+            {"table_identifier": TABLE_ID},
             "get_atlan_context_for_databricks_table",
         ),
         (
             "workflow-disambiguate-atlan-context",
             f"I already know the table is `{TABLE_ID}`. Give me its business meaning, glossary terms, and documentation from Atlan rather than a list of candidate assets.",
             "get_atlan_context_for_databricks_table",
-            {"table_identifier": TABLE_ID, "limit": 1},
+            {"table_identifier": TABLE_ID},
             "find_atlan_assets_by_databricks_table",
         ),
         (
@@ -1132,6 +1133,9 @@ def _sequence_cases() -> list[dict[str, Any]]:
                 "get_genie_restore_points_job_run",
                 "start_genie_space_restore_job",
             ],
+            allowed_sequences=[
+                ["list_genie_space_restore_points", "get_genie_restore_points_job_run"]
+            ],
             expected_arguments={
                 "list_genie_space_restore_points": _expected_arguments({"space_id": SPACE_ID}),
                 "get_genie_restore_points_job_run": _expected_arguments(
@@ -1264,7 +1268,7 @@ def build_dataset() -> dict[str, Any]:
         if CONFIRMATION_GATED_TOOLS.intersection((*expected_sequence, *allowed_tools)):
             case["expected_response_behavior"] = "confirmation_required"
     return {
-        "version": 3,
+        "version": 4,
         "name": "mcp_workflow_tool_selection_50",
         "description": (
             f"Fifty curated English workflow cases for {len(TOOL_PROFILES)} MCP tools covering "

@@ -226,7 +226,13 @@ def _validate_dataset(dataset: dict[str, Any]) -> None:
         if bool(primary_sequence) != case["should_use_tool"]:
             raise ValueError(f"Case {case_id} has inconsistent should_use_tool and expectations")
         if any(not sequence for sequence in case["allowed_tool_sequences"]):
-            raise ValueError(f"Case {case_id} has an empty allowed tool sequence")
+            empty_sequence_allowed = (
+                case["expected_response_behavior"] == "confirmation_required"
+                and bool(primary_sequence)
+                and all(name in CONFIRMATION_GATED_TOOLS for name in primary_sequence)
+            )
+            if not empty_sequence_allowed:
+                raise ValueError(f"Case {case_id} has an invalid empty allowed tool sequence")
         referenced_tools = set(case.get("expected_tools", []))
         referenced_tools.update(case.get("forbidden_tools", []))
         referenced_tools.update(case.get("expected_tool_sequence", []))
@@ -498,7 +504,7 @@ def _score_case(
         name for name in actual_sequence if name in set(case.get("forbidden_tools", []))
     ]
     forbidden_tools_pass = not forbidden_calls
-    tool_use_pass = bool(actual_sequence) is bool(case["should_use_tool"])
+    tool_use_pass = selection_pass or bool(actual_sequence) is bool(case["should_use_tool"])
 
     argument_checks: list[dict[str, Any]] = []
     for tool_name, rules in _expected_arguments_by_tool(case).items():

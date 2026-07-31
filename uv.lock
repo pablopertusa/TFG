@@ -2339,6 +2339,7 @@ dev = [
     { name = "openai" },
     { name = "openai-agents" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "ruff" },
 ]
@@ -2363,6 +2364,7 @@ dev = [
     { name = "openai", specifier = ">=1.99.9" },
     { name = "openai-agents", specifier = ">=0.5.0" },
     { name = "pytest" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests" },
     { name = "ruff", specifier = ">=0.8.0" },
 ]
