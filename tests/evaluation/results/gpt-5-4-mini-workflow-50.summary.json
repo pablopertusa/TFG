@@ -1,0 +1,1508 @@
+{
+  "dataset": {
+    "name": "mcp_workflow_tool_selection_50",
+    "version": 3,
+    "review_status": "pending_user_review",
+    "path": "/mnt/c/Users/PePa234/code/mcp-PoC/tests/evaluation/tool_selection_dataset.yaml",
+    "sha256": "21664a4bad630effb88dc7c7e3869f378ccb305f300beedfee7ecae2517dc757"
+  },
+  "started_at": "2026-07-31T15:44:46.289473+00:00",
+  "completed_at": "2026-07-31T15:58:09.835627+00:00",
+  "latency_ms": 803540.614,
+  "output_path": "tests/evaluation/results/gpt-5-4-mini-workflow-50.jsonl",
+  "configuration": {
+    "model": "databricks-gpt-5-4",
+    "profile": "mcp-oauth",
+    "mcp_url": "http://127.0.0.1:8000/mcp",
+    "max_turns": 6,
+    "model_retries": 0,
+    "mcp_retries": 0,
+    "synthetic_only": true,
+    "tracing_enabled": true,
+    "mlflow_experiment": {
+      "id": "302724619277234",
+      "name": "/Users/pablo.pertusa@hp.com/mcp-tool-selection-eval"
+    },
+    "available_tools": [
+      "find_atlan_assets_by_databricks_table",
+      "get_atlan_context_for_databricks_table",
+      "list_genie_space_conversations",
+      "list_genie_conversation_messages",
+      "list_genie_messages_for_conversations",
+      "get_genie_usage_metrics",
+      "start_genie_usage_metrics_query",
+      "get_genie_usage_metrics_query_result",
+      "list_genie_benchmark_runs",
+      "get_genie_benchmark_run",
+      "list_genie_benchmark_run_results",
+      "get_genie_benchmark_result_details",
+      "start_genie_serialization_job",
+      "get_genie_serialization_job_run",
+      "list_genie_space_restore_points",
+      "get_genie_restore_points_job_run",
+      "start_genie_space_restore_job",
+      "get_genie_space_restore_job_run"
+    ],
+    "tool_definitions_sha256": "34f751abf4a1f6909ad236a6e02109f7e8d441f5a70b0f0645370d5700679092"
+  },
+  "tool_definitions": [
+    {
+      "name": "find_atlan_assets_by_databricks_table",
+      "description": "Find Atlan assets matching a Databricks table identifier.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_identifier": {
+            "type": "string",
+            "description": "Databricks table identifier in catalog.schema.table format."
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "description": "Maximum number of matching assets to return. Capped at 100."
+          }
+        },
+        "required": [
+          "table_identifier"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_atlan_context_for_databricks_table",
+      "description": "Get business context from Atlan for a Databricks table identifier.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_identifier": {
+            "type": "string",
+            "description": "Databricks table identifier in catalog.schema.table format."
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "description": "Maximum number of matching assets to inspect. Capped at 100."
+          }
+        },
+        "required": [
+          "table_identifier"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_space_conversations",
+      "description": "List conversations for a Databricks Genie Space available to the authenticated user.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "include_all": {
+            "default": true,
+            "type": "boolean",
+            "description": "Whether to include all conversations instead of only recent conversations."
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "description": "Maximum number of conversations to return. Capped at 100."
+          }
+        },
+        "required": [
+          "space_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_conversation_messages",
+      "description": "List messages for a Databricks Genie conversation available to the authenticated user.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "conversation_id": {
+            "type": "string",
+            "description": "Databricks Genie conversation ID."
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "description": "Maximum number of messages to return. Capped at 100."
+          }
+        },
+        "required": [
+          "space_id",
+          "conversation_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_messages_for_conversations",
+      "description": "List messages for multiple Databricks Genie conversations available to the authenticated user.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "conversation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Databricks Genie conversation IDs. Capped at 50 conversations."
+          },
+          "limit_per_conversation": {
+            "default": 50,
+            "type": "integer",
+            "description": "Maximum messages to return per conversation. Capped at 100."
+          }
+        },
+        "required": [
+          "space_id",
+          "conversation_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_usage_metrics",
+      "description": "Get Genie Space usage metrics and wait for the SQL statement to complete.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "lookback_days": {
+            "default": 90,
+            "type": "integer",
+            "description": "Number of recent days to scan. Capped between 1 and 3660."
+          },
+          "timeout_seconds": {
+            "default": 180,
+            "type": "integer",
+            "description": "Maximum time to wait for the SQL statement. Capped between 10 and 600."
+          },
+          "poll_interval_seconds": {
+            "default": 5,
+            "type": "integer",
+            "description": "Polling interval while the SQL statement runs. Capped between 2 and 30."
+          }
+        },
+        "required": [
+          "space_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "start_genie_usage_metrics_query",
+      "description": "Start a Genie Space usage metrics SQL statement and return quickly. This is the recommended way of retrieving usage data. \nUseful is `get_genie_usage_metrics` times out. ",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "lookback_days": {
+            "default": 90,
+            "type": "integer",
+            "description": "Number of recent days to scan. Capped between 1 and 3660."
+          }
+        },
+        "required": [
+          "space_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_usage_metrics_query_result",
+      "description": "Fetch the result of a Genie Space usage metrics SQL statement.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "statement_id": {
+            "type": "string",
+            "description": "Databricks SQL statement ID returned by start_genie_usage_metrics_query\nor by get_genie_usage_metrics when it times out."
+          }
+        },
+        "required": [
+          "statement_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_benchmark_runs",
+      "description": "List Genie benchmark evaluation runs for a Databricks Genie Space.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "description": "Maximum number of benchmark runs to return. Capped at 100."
+          }
+        },
+        "required": [
+          "space_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_benchmark_run",
+      "description": "Get status and summary fields for a Genie benchmark evaluation run.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "run_id": {
+            "type": "string",
+            "description": "Genie benchmark evaluation run ID."
+          }
+        },
+        "required": [
+          "space_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_benchmark_run_results",
+      "description": "List result rows for a Genie benchmark evaluation run.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "run_id": {
+            "type": "string",
+            "description": "Genie benchmark evaluation run ID."
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer",
+            "description": "Maximum number of benchmark result rows to return. Capped at 100."
+          }
+        },
+        "required": [
+          "space_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_benchmark_result_details",
+      "description": "Get detailed information for a single Genie benchmark evaluation result.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "run_id": {
+            "type": "string",
+            "description": "Genie benchmark evaluation run ID."
+          },
+          "result_id": {
+            "type": "string",
+            "description": "Genie benchmark evaluation result ID."
+          }
+        },
+        "required": [
+          "space_id",
+          "run_id",
+          "result_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "start_genie_serialization_job",
+      "description": "Start the configured Databricks Job that serializes Genie Spaces by tag or space ID.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tag_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional tag key to serialize spaces by tag."
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional Genie Space ID to serialize a single space."
+          },
+          "confirmation": {
+            "default": "",
+            "type": "string",
+            "description": "Must equal CONFIRM RUN GENIE SERIALIZATION JOB to start the job."
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_serialization_job_run",
+      "description": "Get status for a Databricks Job run created by the Genie serialization job.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "description": "Databricks Job run ID."
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "list_genie_space_restore_points",
+      "description": "List exact restore points available for a Genie Space by running the configured Job.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "timeout_minutes": {
+            "default": 10,
+            "type": "integer",
+            "description": "Maximum wait time. Capped at 120 minutes."
+          },
+          "poll_interval_seconds": {
+            "default": 10,
+            "type": "integer",
+            "description": "Poll interval. Capped between 5 and 120 seconds."
+          }
+        },
+        "required": [
+          "space_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_restore_points_job_run",
+      "description": "Get status and output for a Genie restore-points listing Job run.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "description": "Databricks Job run ID."
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "start_genie_space_restore_job",
+      "description": "Start the configured Genie Space restore Job for an exact snapshot date.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "space_id": {
+            "type": "string",
+            "description": "Databricks Genie Space ID."
+          },
+          "snapshot_date": {
+            "type": "string",
+            "description": "Restore snapshot date in YYYY-MM-DD format."
+          },
+          "confirmation": {
+            "default": "",
+            "type": "string",
+            "description": "Must equal CONFIRM RESTORE GENIE SPACE <space_id> <snapshot_date>."
+          }
+        },
+        "required": [
+          "space_id",
+          "snapshot_date"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "get_genie_space_restore_job_run",
+      "description": "Get status and output for a Genie Space restore Job run.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "description": "Databricks Job run ID."
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    }
+  ],
+  "selected_cases": 50,
+  "executed_cases": 50,
+  "skipped_cases": 0,
+  "results": {
+    "total": 50,
+    "passed": {
+      "count": 41,
+      "rate": 0.82
+    },
+    "selection_pass": {
+      "count": 45,
+      "rate": 0.9
+    },
+    "primary_selection_pass": {
+      "count": 45,
+      "rate": 0.9
+    },
+    "used_allowed_sequence": {
+      "count": 0,
+      "rate": 0.0
+    },
+    "forbidden_tools_pass": {
+      "count": 49,
+      "rate": 0.98
+    },
+    "tool_use_pass": {
+      "count": 46,
+      "rate": 0.92
+    },
+    "arguments_pass": {
+      "count": 43,
+      "rate": 0.86
+    },
+    "response_behavior_pass": {
+      "count": 47,
+      "rate": 0.94
+    }
+  },
+  "errors": 0,
+  "tokens": {
+    "requests": 99,
+    "input_tokens": 160437,
+    "output_tokens": 6513,
+    "total_tokens": 166950
+  },
+  "estimated_cost": 0.49878442152,
+  "by_category": {
+    "abstention": {
+      "total": 6,
+      "passed": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 6,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 6,
+        "rate": 1.0
+      }
+    },
+    "ambiguous": {
+      "total": 8,
+      "passed": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "selection_pass": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "primary_selection_pass": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 7,
+        "rate": 0.875
+      },
+      "tool_use_pass": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "arguments_pass": {
+        "count": 8,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 6,
+        "rate": 0.75
+      }
+    },
+    "disambiguation": {
+      "total": 8,
+      "passed": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "selection_pass": {
+        "count": 8,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 8,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 8,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 8,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 6,
+        "rate": 0.75
+      },
+      "response_behavior_pass": {
+        "count": 8,
+        "rate": 1.0
+      }
+    },
+    "single_tool": {
+      "total": 18,
+      "passed": {
+        "count": 15,
+        "rate": 0.8333
+      },
+      "selection_pass": {
+        "count": 16,
+        "rate": 0.8889
+      },
+      "primary_selection_pass": {
+        "count": 16,
+        "rate": 0.8889
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 18,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 16,
+        "rate": 0.8889
+      },
+      "arguments_pass": {
+        "count": 15,
+        "rate": 0.8333
+      },
+      "response_behavior_pass": {
+        "count": 18,
+        "rate": 1.0
+      }
+    },
+    "tool_sequence": {
+      "total": 10,
+      "passed": {
+        "count": 8,
+        "rate": 0.8
+      },
+      "selection_pass": {
+        "count": 9,
+        "rate": 0.9
+      },
+      "primary_selection_pass": {
+        "count": 9,
+        "rate": 0.9
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 10,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 10,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 8,
+        "rate": 0.8
+      },
+      "response_behavior_pass": {
+        "count": 9,
+        "rate": 0.9
+      }
+    }
+  },
+  "by_tool": {
+    "find_atlan_assets_by_databricks_table": {
+      "total": 3,
+      "passed": {
+        "count": 2,
+        "rate": 0.6667
+      },
+      "selection_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 0.6667
+      },
+      "response_behavior_pass": {
+        "count": 3,
+        "rate": 1.0
+      }
+    },
+    "get_atlan_context_for_databricks_table": {
+      "total": 2,
+      "passed": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "get_genie_benchmark_result_details": {
+      "total": 2,
+      "passed": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 0.5
+      }
+    },
+    "get_genie_benchmark_run": {
+      "total": 2,
+      "passed": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 0.5
+      }
+    },
+    "get_genie_restore_points_job_run": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "get_genie_serialization_job_run": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "get_genie_space_restore_job_run": {
+      "total": 1,
+      "passed": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 1.0
+      }
+    },
+    "get_genie_usage_metrics": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "get_genie_usage_metrics_query_result": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "list_genie_benchmark_run_results": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "list_genie_benchmark_runs": {
+      "total": 1,
+      "passed": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 1.0
+      }
+    },
+    "list_genie_conversation_messages": {
+      "total": 3,
+      "passed": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 3,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 3,
+        "rate": 1.0
+      }
+    },
+    "list_genie_messages_for_conversations": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "list_genie_space_conversations": {
+      "total": 2,
+      "passed": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "list_genie_space_restore_points": {
+      "total": 1,
+      "passed": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 1.0
+      }
+    },
+    "start_genie_serialization_job": {
+      "total": 1,
+      "passed": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "selection_pass": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "primary_selection_pass": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 1,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "arguments_pass": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "response_behavior_pass": {
+        "count": 1,
+        "rate": 1.0
+      }
+    },
+    "start_genie_space_restore_job": {
+      "total": 2,
+      "passed": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "primary_selection_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "arguments_pass": {
+        "count": 1,
+        "rate": 0.5
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    },
+    "start_genie_usage_metrics_query": {
+      "total": 2,
+      "passed": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "primary_selection_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "used_allowed_sequence": {
+        "count": 0,
+        "rate": 0.0
+      },
+      "forbidden_tools_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "tool_use_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "arguments_pass": {
+        "count": 2,
+        "rate": 1.0
+      },
+      "response_behavior_pass": {
+        "count": 2,
+        "rate": 1.0
+      }
+    }
+  }
+}

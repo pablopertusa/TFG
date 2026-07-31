@@ -1,0 +1,1564 @@
+version: 3
+name: mcp_workflow_tool_selection_50
+description: Fifty curated English workflow cases for 18 MCP tools covering Atlan, conversations, usage, benchmarks,
+  serialization, and restore flows.
+review_status: pending_user_review
+execution_policy:
+  mode: synthetic_only
+  real_tool_execution: false
+  reason: Evaluate selection and arguments without API calls, SQL, Jobs, or mutations.
+defaults:
+  model: databricks-gpt-5-4-mini
+  max_turns: 6
+  model_retries: 0
+  mcp_retries: 0
+coverage_requirements_per_tool:
+  positive: 1
+identifiers:
+  space_id: 01f00000000000000000000000000000
+  conversation_id: 01f10000000000000000000000000000
+  benchmark_run_id: 01f20000000000000000000000000000
+  benchmark_result_id: 01f30000000000000000000000000000
+  statement_id: 11111111-2222-4333-8444-555555555555
+  serialization_run_id: 123456789012341
+  restore_points_run_id: 123456789012342
+  restore_run_id: 123456789012343
+  table_identifier: eval_catalog.eval_schema.eval_orders
+  snapshot_date: '2026-01-15'
+tool_groups:
+  atlan:
+  - find_atlan_assets_by_databricks_table
+  - get_atlan_context_for_databricks_table
+  conversations_and_messages:
+  - list_genie_space_conversations
+  - list_genie_conversation_messages
+  - list_genie_messages_for_conversations
+  usage_metrics:
+  - get_genie_usage_metrics
+  - start_genie_usage_metrics_query
+  - get_genie_usage_metrics_query_result
+  benchmarks:
+  - list_genie_benchmark_runs
+  - get_genie_benchmark_run
+  - list_genie_benchmark_run_results
+  - get_genie_benchmark_result_details
+  snapshots:
+  - start_genie_serialization_job
+  - get_genie_serialization_job_run
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  - start_genie_space_restore_job
+  - get_genie_space_restore_job_run
+tool_inventory:
+- find_atlan_assets_by_databricks_table
+- get_atlan_context_for_databricks_table
+- list_genie_space_conversations
+- list_genie_conversation_messages
+- list_genie_messages_for_conversations
+- get_genie_usage_metrics
+- start_genie_usage_metrics_query
+- get_genie_usage_metrics_query_result
+- list_genie_benchmark_runs
+- get_genie_benchmark_run
+- list_genie_benchmark_run_results
+- get_genie_benchmark_result_details
+- start_genie_serialization_job
+- get_genie_serialization_job_run
+- list_genie_space_restore_points
+- get_genie_restore_points_job_run
+- start_genie_space_restore_job
+- get_genie_space_restore_job_run
+tool_profiles:
+  find_atlan_assets_by_databricks_table:
+    purpose: Find Atlan assets that represent a Databricks table.
+    closest_tool: get_atlan_context_for_databricks_table
+    example_arguments:
+      table_identifier: eval_catalog.eval_schema.eval_orders
+      limit: 5
+  get_atlan_context_for_databricks_table:
+    purpose: Retrieve business context from Atlan for a Databricks table.
+    closest_tool: find_atlan_assets_by_databricks_table
+    example_arguments:
+      table_identifier: eval_catalog.eval_schema.eval_orders
+      limit: 1
+  list_genie_space_conversations:
+    purpose: List conversations in a Genie Space.
+    closest_tool: list_genie_conversation_messages
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      include_all: false
+      limit: 5
+  list_genie_conversation_messages:
+    purpose: List messages from one Genie conversation.
+    closest_tool: list_genie_messages_for_conversations
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      conversation_id: 01f10000000000000000000000000000
+      limit: 10
+  list_genie_messages_for_conversations:
+    purpose: List messages for several Genie conversations in one call.
+    closest_tool: list_genie_conversation_messages
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      conversation_ids: &id001
+      - 01f10000000000000000000000000000
+      - 01f10000000000000000000000000001
+      limit_per_conversation: 10
+  get_genie_usage_metrics:
+    purpose: Retrieve completed Genie usage metrics synchronously.
+    closest_tool: start_genie_usage_metrics_query
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      lookback_days: 7
+      timeout_seconds: 30
+      poll_interval_seconds: 2
+  start_genie_usage_metrics_query:
+    purpose: Start an asynchronous Genie usage-metrics query.
+    closest_tool: get_genie_usage_metrics
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      lookback_days: 7
+  get_genie_usage_metrics_query_result:
+    purpose: Retrieve the status and result of a started metrics statement.
+    closest_tool: start_genie_usage_metrics_query
+    example_arguments:
+      statement_id: 11111111-2222-4333-8444-555555555555
+  list_genie_benchmark_runs:
+    purpose: List benchmark runs for a Genie Space.
+    closest_tool: get_genie_benchmark_run
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      limit: 5
+  get_genie_benchmark_run:
+    purpose: Retrieve one Genie benchmark run.
+    closest_tool: list_genie_benchmark_runs
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      run_id: 01f20000000000000000000000000000
+  list_genie_benchmark_run_results:
+    purpose: List result rows from one benchmark run.
+    closest_tool: get_genie_benchmark_result_details
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      run_id: 01f20000000000000000000000000000
+      limit: 5
+  get_genie_benchmark_result_details:
+    purpose: Retrieve the details of one benchmark result.
+    closest_tool: list_genie_benchmark_run_results
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      run_id: 01f20000000000000000000000000000
+      result_id: 01f30000000000000000000000000000
+  start_genie_serialization_job:
+    purpose: Prepare serialization of a Genie Space without approving execution.
+    closest_tool: get_genie_serialization_job_run
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+  get_genie_serialization_job_run:
+    purpose: Check a serialization Job run.
+    closest_tool: get_genie_space_restore_job_run
+    example_arguments:
+      run_id: 123456789012341
+  list_genie_space_restore_points:
+    purpose: List available restore points for a Genie Space.
+    closest_tool: start_genie_space_restore_job
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      timeout_minutes: 1
+      poll_interval_seconds: 5
+  get_genie_restore_points_job_run:
+    purpose: Check a Job run that discovers restore points.
+    closest_tool: get_genie_space_restore_job_run
+    example_arguments:
+      run_id: 123456789012342
+  start_genie_space_restore_job:
+    purpose: Prepare a Genie Space restore without approving execution.
+    closest_tool: list_genie_space_restore_points
+    example_arguments:
+      space_id: 01f00000000000000000000000000000
+      snapshot_date: '2026-01-15'
+  get_genie_space_restore_job_run:
+    purpose: Check a Genie Space restore Job run.
+    closest_tool: get_genie_restore_points_job_run
+    example_arguments:
+      run_id: 123456789012343
+synthetic_results:
+  find_atlan_assets_by_databricks_table:
+    matches:
+    - guid: eval-asset-guid
+      qualified_name: eval_catalog.eval_schema.eval_orders
+  get_atlan_context_for_databricks_table:
+    combined_context_text: Synthetic business context for evaluation.
+  list_genie_space_conversations:
+    conversations:
+    - conversation_id: 01f10000000000000000000000000000
+    - conversation_id: 01f10000000000000000000000000001
+  list_genie_conversation_messages:
+    conversation_id: 01f10000000000000000000000000000
+    messages:
+    - message_id: eval-message-1
+      content: Synthetic message
+  list_genie_messages_for_conversations:
+    results:
+    - conversation_id: 01f10000000000000000000000000000
+      messages: []
+    - conversation_id: 01f10000000000000000000000000001
+      messages: []
+  get_genie_usage_metrics:
+    succeeded: true
+    metrics:
+      total_questions: 7
+  start_genie_usage_metrics_query:
+    statement_id: 11111111-2222-4333-8444-555555555555
+    done: false
+    result_tool: get_genie_usage_metrics_query_result
+  get_genie_usage_metrics_query_result:
+    statement_id: 11111111-2222-4333-8444-555555555555
+    done: true
+    succeeded: true
+    metrics:
+      total_questions: 7
+  list_genie_benchmark_runs:
+    benchmark_runs:
+    - id: 01f20000000000000000000000000000
+      state: COMPLETED
+  get_genie_benchmark_run:
+    benchmark_run:
+      id: 01f20000000000000000000000000000
+      state: COMPLETED
+  list_genie_benchmark_run_results:
+    results:
+    - id: 01f30000000000000000000000000000
+      status: FAILED
+  get_genie_benchmark_result_details:
+    result:
+      id: 01f30000000000000000000000000000
+      status: FAILED
+  start_genie_serialization_job:
+    executed: false
+    synthetic_run_id: 123456789012341
+    confirmation_required: true
+  get_genie_serialization_job_run:
+    run:
+      run_id: 123456789012341
+      state: TERMINATED
+  list_genie_space_restore_points:
+    executed: false
+    run_id: 123456789012342
+    completed: false
+    timed_out: true
+    run:
+      run_id: 123456789012342
+      state: RUNNING
+    output: null
+  get_genie_restore_points_job_run:
+    run:
+      run_id: 123456789012342
+      state: TERMINATED
+    output:
+      restore_points:
+      - '2026-01-15'
+  start_genie_space_restore_job:
+    executed: false
+    synthetic_run_id: 123456789012343
+    confirmation_required: true
+  get_genie_space_restore_job_run:
+    run:
+      run_id: 123456789012343
+      state: TERMINATED
+cases:
+- id: workflow-find-atlan-assets-by-databricks-table-direct
+  category: single_tool
+  tool_under_test: find_atlan_assets_by_databricks_table
+  tags:
+  - positive
+  - workflow
+  user_prompt: Find up to 5 Atlan assets that represent `eval_catalog.eval_schema.eval_orders`. I only need the
+    matching assets and GUIDs.
+  expected_tools:
+  - find_atlan_assets_by_databricks_table
+  allowed_tools: []
+  forbidden_tools:
+  - get_atlan_context_for_databricks_table
+  expected_tool_sequence:
+  - find_atlan_assets_by_databricks_table
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    table_identifier:
+      matcher: exact
+      value: eval_catalog.eval_schema.eval_orders
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-get-atlan-context-for-databricks-table-direct
+  category: single_tool
+  tool_under_test: get_atlan_context_for_databricks_table
+  tags:
+  - positive
+  - workflow
+  user_prompt: Give me the business description, glossary terms, and README context for `eval_catalog.eval_schema.eval_orders`
+    from Atlan. Use at most one matching asset.
+  expected_tools:
+  - get_atlan_context_for_databricks_table
+  allowed_tools: []
+  forbidden_tools:
+  - find_atlan_assets_by_databricks_table
+  expected_tool_sequence:
+  - get_atlan_context_for_databricks_table
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    table_identifier:
+      matcher: exact
+      value: eval_catalog.eval_schema.eval_orders
+    limit:
+      matcher: exact
+      value: 1
+  expected_response_behavior: answer
+- id: workflow-list-genie-space-conversations-direct
+  category: single_tool
+  tool_under_test: list_genie_space_conversations
+  tags:
+  - positive
+  - workflow
+  user_prompt: Show me the 5 most recent conversations in Genie Space `01f00000000000000000000000000000`. I only
+    need the conversation list for now.
+  expected_tools:
+  - list_genie_space_conversations
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence:
+  - list_genie_space_conversations
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    include_all:
+      matcher: exact
+      value: false
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-list-genie-conversation-messages-direct
+  category: single_tool
+  tool_under_test: list_genie_conversation_messages
+  tags:
+  - positive
+  - workflow
+  user_prompt: Show up to 10 messages from conversation `01f10000000000000000000000000000` in Genie Space `01f00000000000000000000000000000`.
+  expected_tools:
+  - list_genie_conversation_messages
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_messages_for_conversations
+  expected_tool_sequence:
+  - list_genie_conversation_messages
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    conversation_id:
+      matcher: exact
+      value: 01f10000000000000000000000000000
+    limit:
+      matcher: exact
+      value: 10
+  expected_response_behavior: answer
+- id: workflow-list-genie-messages-for-conversations-direct
+  category: single_tool
+  tool_under_test: list_genie_messages_for_conversations
+  tags:
+  - positive
+  - workflow
+  user_prompt: 'Fetch up to 10 messages for each of these conversations in one batch: `01f10000000000000000000000000000`
+    and `01f10000000000000000000000000001`. They belong to Genie Space `01f00000000000000000000000000000`.'
+  expected_tools:
+  - list_genie_messages_for_conversations
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence:
+  - list_genie_messages_for_conversations
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    conversation_ids:
+      matcher: exact
+      value: *id001
+    limit_per_conversation:
+      matcher: exact
+      value: 10
+  expected_response_behavior: answer
+- id: workflow-get-genie-usage-metrics-direct
+  category: single_tool
+  tool_under_test: get_genie_usage_metrics
+  tags:
+  - positive
+  - workflow
+  user_prompt: Give me the completed usage metrics for Genie Space `01f00000000000000000000000000000` over the last
+    7 days. Wait up to 30 seconds and poll every 2 seconds.
+  expected_tools:
+  - get_genie_usage_metrics
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_usage_metrics_query
+  expected_tool_sequence:
+  - get_genie_usage_metrics
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    lookback_days:
+      matcher: exact
+      value: 7
+    timeout_seconds:
+      matcher: exact
+      value: 30
+    poll_interval_seconds:
+      matcher: exact
+      value: 2
+  expected_response_behavior: answer
+- id: workflow-start-genie-usage-metrics-query-direct
+  category: single_tool
+  tool_under_test: start_genie_usage_metrics_query
+  tags:
+  - positive
+  - workflow
+  user_prompt: Start a 7-day usage-metrics query for Genie Space `01f00000000000000000000000000000` and return immediately
+    with the statement ID.
+  expected_tools:
+  - start_genie_usage_metrics_query
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_usage_metrics
+  expected_tool_sequence:
+  - start_genie_usage_metrics_query
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    lookback_days:
+      matcher: exact
+      value: 7
+  expected_response_behavior: answer
+- id: workflow-get-genie-usage-metrics-query-result-direct
+  category: single_tool
+  tool_under_test: get_genie_usage_metrics_query_result
+  tags:
+  - positive
+  - workflow
+  user_prompt: Check whether usage-metrics statement `11111111-2222-4333-8444-555555555555` has finished and return
+    its result if available.
+  expected_tools:
+  - get_genie_usage_metrics_query_result
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_usage_metrics_query
+  expected_tool_sequence:
+  - get_genie_usage_metrics_query_result
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    statement_id:
+      matcher: exact
+      value: 11111111-2222-4333-8444-555555555555
+  expected_response_behavior: answer
+- id: workflow-list-genie-benchmark-runs-direct
+  category: single_tool
+  tool_under_test: list_genie_benchmark_runs
+  tags:
+  - positive
+  - workflow
+  user_prompt: List the 5 most recent benchmark runs for Genie Space `01f00000000000000000000000000000` so I can
+    choose one to review.
+  expected_tools:
+  - list_genie_benchmark_runs
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_benchmark_run
+  expected_tool_sequence:
+  - list_genie_benchmark_runs
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-get-genie-benchmark-run-direct
+  category: single_tool
+  tool_under_test: get_genie_benchmark_run
+  tags:
+  - positive
+  - workflow
+  user_prompt: Show the status and summary of benchmark run `01f20000000000000000000000000000` in Genie Space `01f00000000000000000000000000000`.
+  expected_tools:
+  - get_genie_benchmark_run
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_benchmark_runs
+  expected_tool_sequence:
+  - get_genie_benchmark_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    run_id:
+      matcher: exact
+      value: 01f20000000000000000000000000000
+  expected_response_behavior: answer
+- id: workflow-list-genie-benchmark-run-results-direct
+  category: single_tool
+  tool_under_test: list_genie_benchmark_run_results
+  tags:
+  - positive
+  - workflow
+  user_prompt: List the first 5 result rows from benchmark run `01f20000000000000000000000000000` in Genie Space
+    `01f00000000000000000000000000000`.
+  expected_tools:
+  - list_genie_benchmark_run_results
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_benchmark_result_details
+  expected_tool_sequence:
+  - list_genie_benchmark_run_results
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    run_id:
+      matcher: exact
+      value: 01f20000000000000000000000000000
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-get-genie-benchmark-result-details-direct
+  category: single_tool
+  tool_under_test: get_genie_benchmark_result_details
+  tags:
+  - positive
+  - workflow
+  user_prompt: Open benchmark result `01f30000000000000000000000000000` from run `01f20000000000000000000000000000`
+    in Genie Space `01f00000000000000000000000000000` and show its details.
+  expected_tools:
+  - get_genie_benchmark_result_details
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_benchmark_run_results
+  expected_tool_sequence:
+  - get_genie_benchmark_result_details
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    run_id:
+      matcher: exact
+      value: 01f20000000000000000000000000000
+    result_id:
+      matcher: exact
+      value: 01f30000000000000000000000000000
+  expected_response_behavior: answer
+- id: workflow-start-genie-serialization-job-direct
+  category: single_tool
+  tool_under_test: start_genie_serialization_job
+  tags:
+  - positive
+  - workflow
+  user_prompt: Prepare a serialization request for Genie Space `01f00000000000000000000000000000`, but do not execute
+    it. Stop at the approval step and tell me what confirmation is required.
+  expected_tools:
+  - start_genie_serialization_job
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_space_restore_job
+  expected_tool_sequence:
+  - start_genie_serialization_job
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    confirmation:
+      matcher: absent
+  expected_response_behavior: confirmation_required
+- id: workflow-get-genie-serialization-job-run-direct
+  category: single_tool
+  tool_under_test: get_genie_serialization_job_run
+  tags:
+  - positive
+  - workflow
+  user_prompt: Check the current status of serialization run `123456789012341`.
+  expected_tools:
+  - get_genie_serialization_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_space_restore_job_run
+  expected_tool_sequence:
+  - get_genie_serialization_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    run_id:
+      matcher: exact
+      value: 123456789012341
+  expected_response_behavior: answer
+- id: workflow-list-genie-space-restore-points-direct
+  category: single_tool
+  tool_under_test: list_genie_space_restore_points
+  tags:
+  - positive
+  - workflow
+  user_prompt: Find the restore points available for Genie Space `01f00000000000000000000000000000`. Wait no more
+    than 1 minute and poll every 5 seconds.
+  expected_tools:
+  - list_genie_space_restore_points
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_space_restore_job
+  expected_tool_sequence:
+  - list_genie_space_restore_points
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    timeout_minutes:
+      matcher: exact
+      value: 1
+    poll_interval_seconds:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-get-genie-restore-points-job-run-direct
+  category: single_tool
+  tool_under_test: get_genie_restore_points_job_run
+  tags:
+  - positive
+  - workflow
+  user_prompt: Check restore-point discovery run `123456789012342` and return its output if it has completed.
+  expected_tools:
+  - get_genie_restore_points_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_space_restore_job_run
+  expected_tool_sequence:
+  - get_genie_restore_points_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    run_id:
+      matcher: exact
+      value: 123456789012342
+  expected_response_behavior: answer
+- id: workflow-start-genie-space-restore-job-direct
+  category: single_tool
+  tool_under_test: start_genie_space_restore_job
+  tags:
+  - positive
+  - workflow
+  user_prompt: Prepare a restore of Genie Space `01f00000000000000000000000000000` to `2026-01-15`, but do not execute
+    it. Stop at the approval step and report the required confirmation.
+  expected_tools:
+  - start_genie_space_restore_job
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_space_restore_points
+  expected_tool_sequence:
+  - start_genie_space_restore_job
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    snapshot_date:
+      matcher: exact
+      value: '2026-01-15'
+    confirmation:
+      matcher: absent
+  expected_response_behavior: confirmation_required
+- id: workflow-get-genie-space-restore-job-run-direct
+  category: single_tool
+  tool_under_test: get_genie_space_restore_job_run
+  tags:
+  - positive
+  - workflow
+  user_prompt: Check the current status of Genie Space restore run `123456789012343` and include its output if complete.
+  expected_tools:
+  - get_genie_space_restore_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_restore_points_job_run
+  expected_tool_sequence:
+  - get_genie_space_restore_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    run_id:
+      matcher: exact
+      value: 123456789012343
+  expected_response_behavior: answer
+- id: workflow-disambiguate-atlan-assets
+  category: disambiguation
+  tool_under_test: find_atlan_assets_by_databricks_table
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: We are reconciling catalog records for `eval_catalog.eval_schema.eval_orders`. Return the matching
+    Atlan assets and their GUIDs; do not build a business-context summary yet.
+  expected_tools:
+  - find_atlan_assets_by_databricks_table
+  allowed_tools: []
+  forbidden_tools:
+  - get_atlan_context_for_databricks_table
+  expected_tool_sequence:
+  - find_atlan_assets_by_databricks_table
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    table_identifier:
+      matcher: exact
+      value: eval_catalog.eval_schema.eval_orders
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-disambiguate-atlan-context
+  category: disambiguation
+  tool_under_test: get_atlan_context_for_databricks_table
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: I already know the table is `eval_catalog.eval_schema.eval_orders`. Give me its business meaning,
+    glossary terms, and documentation from Atlan rather than a list of candidate assets.
+  expected_tools:
+  - get_atlan_context_for_databricks_table
+  allowed_tools: []
+  forbidden_tools:
+  - find_atlan_assets_by_databricks_table
+  expected_tool_sequence:
+  - get_atlan_context_for_databricks_table
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    table_identifier:
+      matcher: exact
+      value: eval_catalog.eval_schema.eval_orders
+    limit:
+      matcher: exact
+      value: 1
+  expected_response_behavior: answer
+- id: workflow-disambiguate-single-conversation
+  category: disambiguation
+  tool_under_test: list_genie_conversation_messages
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: Review only conversation `01f10000000000000000000000000000` in Genie Space `01f00000000000000000000000000000`
+    and show its first 10 messages.
+  expected_tools:
+  - list_genie_conversation_messages
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_messages_for_conversations
+  expected_tool_sequence:
+  - list_genie_conversation_messages
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    conversation_id:
+      matcher: exact
+      value: 01f10000000000000000000000000000
+    limit:
+      matcher: exact
+      value: 10
+  expected_response_behavior: answer
+- id: workflow-disambiguate-batch-conversations
+  category: disambiguation
+  tool_under_test: list_genie_messages_for_conversations
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: Compare messages from `01f10000000000000000000000000000` and `01f10000000000000000000000000001` in
+    Genie Space `01f00000000000000000000000000000` in one batch, using up to 10 messages per conversation.
+  expected_tools:
+  - list_genie_messages_for_conversations
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence:
+  - list_genie_messages_for_conversations
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    conversation_ids:
+      matcher: exact
+      value:
+      - 01f10000000000000000000000000000
+      - 01f10000000000000000000000000001
+    limit_per_conversation:
+      matcher: exact
+      value: 10
+  expected_response_behavior: answer
+- id: workflow-disambiguate-synchronous-usage
+  category: disambiguation
+  tool_under_test: get_genie_usage_metrics
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: I need the completed 7-day usage numbers for Genie Space `01f00000000000000000000000000000` in this
+    response, not a statement ID to poll later.
+  expected_tools:
+  - get_genie_usage_metrics
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_usage_metrics_query
+  expected_tool_sequence:
+  - get_genie_usage_metrics
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    lookback_days:
+      matcher: exact
+      value: 7
+  expected_response_behavior: answer
+- id: workflow-disambiguate-asynchronous-usage
+  category: disambiguation
+  tool_under_test: start_genie_usage_metrics_query
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: Start the 7-day usage calculation for Genie Space `01f00000000000000000000000000000` and return immediately
+    so another process can poll it later.
+  expected_tools:
+  - start_genie_usage_metrics_query
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_usage_metrics
+  expected_tool_sequence:
+  - start_genie_usage_metrics_query
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    lookback_days:
+      matcher: exact
+      value: 7
+  expected_response_behavior: answer
+- id: workflow-disambiguate-benchmark-results
+  category: disambiguation
+  tool_under_test: list_genie_benchmark_run_results
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: Show up to 5 result rows from benchmark run `01f20000000000000000000000000000` in Genie Space `01f00000000000000000000000000000`.
+    Do not open an individual result yet.
+  expected_tools:
+  - list_genie_benchmark_run_results
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_benchmark_result_details
+  expected_tool_sequence:
+  - list_genie_benchmark_run_results
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    space_id:
+      matcher: exact
+      value: 01f00000000000000000000000000000
+    run_id:
+      matcher: exact
+      value: 01f20000000000000000000000000000
+    limit:
+      matcher: exact
+      value: 5
+  expected_response_behavior: answer
+- id: workflow-disambiguate-restore-points-run
+  category: disambiguation
+  tool_under_test: get_genie_restore_points_job_run
+  tags:
+  - positive
+  - confusion
+  - workflow
+  user_prompt: Run `123456789012342` was discovering available restore points. Check that run, not the run that
+    performs a restore.
+  expected_tools:
+  - get_genie_restore_points_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_space_restore_job_run
+  expected_tool_sequence:
+  - get_genie_restore_points_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    run_id:
+      matcher: exact
+      value: 123456789012342
+  expected_response_behavior: answer
+- id: workflow-missing-atlan-table
+  category: ambiguous
+  tool_under_test: find_atlan_assets_by_databricks_table
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Find the Atlan entry for our orders table.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - find_atlan_assets_by_databricks_table
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-space-conversations
+  category: ambiguous
+  tool_under_test: list_genie_space_conversations
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Show me the latest Genie conversations for the sales team.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_space_conversations
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-conversation-id
+  category: ambiguous
+  tool_under_test: list_genie_conversation_messages
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Show the messages from the conversation in Genie Space `01f00000000000000000000000000000` that we
+    discussed earlier.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-statement-id
+  category: ambiguous
+  tool_under_test: get_genie_usage_metrics_query_result
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Check whether the usage-metrics query has finished.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_usage_metrics_query_result
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-benchmark-run
+  category: ambiguous
+  tool_under_test: get_genie_benchmark_run
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Open the benchmark run for Genie Space `01f00000000000000000000000000000` that failed yesterday.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_benchmark_run
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-benchmark-result
+  category: ambiguous
+  tool_under_test: get_genie_benchmark_result_details
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Open the failed result from benchmark run `01f20000000000000000000000000000` in Genie Space `01f00000000000000000000000000000`.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_benchmark_result_details
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-serialization-run
+  category: ambiguous
+  tool_under_test: get_genie_serialization_job_run
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Check whether the serialization job has finished.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_serialization_job_run
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-missing-restore-date
+  category: ambiguous
+  tool_under_test: start_genie_space_restore_job
+  tags:
+  - not_selected
+  - missing_parameters
+  - workflow
+  user_prompt: Prepare to restore Genie Space `01f00000000000000000000000000000` to the snapshot we approved.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_space_restore_job
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: ask_clarification
+- id: workflow-no-tool-summarize-metrics
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: The weekly usage report says 42 questions, 11 active users, and 3 negative feedback events. Summarize
+    those figures for my status update.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_genie_usage_metrics
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-no-tool-benchmark-email
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: 'Draft a short email from these benchmark results: 18 passed, 2 failed, and both failures were timeout-related.'
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_benchmark_run_results
+  - get_genie_benchmark_result_details
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-no-tool-rewrite-transcript
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: 'Rewrite this conversation note more clearly: ''user asked sales total; assistant returned 4.2M;
+    user requested regional split.'''
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-no-tool-compare-definitions
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: 'Compare these supplied definitions: ''gross revenue is before deductions'' and ''net revenue is
+    after discounts and returns.'''
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - get_atlan_context_for_databricks_table
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-no-tool-explain-restore-point
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: Explain in plain English what a restore point is and why a team might keep one. Do not inspect any
+    workspace resources.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_space_restore_points
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-no-tool-draft-checklist
+  category: abstention
+  tool_under_test: null
+  tags:
+  - not_selected
+  - workflow
+  user_prompt: Create a generic pre-deployment checklist for taking a snapshot and planning a rollback. Do not start
+    any jobs.
+  expected_tools: []
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_serialization_job
+  - start_genie_space_restore_job
+  expected_tool_sequence: []
+  allowed_tool_sequences: []
+  should_use_tool: false
+  expected_arguments: {}
+  expected_response_behavior: answer_without_tools
+- id: workflow-sequence-atlan-context
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - alternative_sequence
+  user_prompt: Locate the Atlan asset for `eval_catalog.eval_schema.eval_orders`, then use it to give me the table's
+    business context.
+  expected_tools:
+  - find_atlan_assets_by_databricks_table
+  - get_atlan_context_for_databricks_table
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - find_atlan_assets_by_databricks_table
+  - get_atlan_context_for_databricks_table
+  allowed_tool_sequences:
+  - - get_atlan_context_for_databricks_table
+  should_use_tool: true
+  expected_arguments:
+    find_atlan_assets_by_databricks_table:
+      table_identifier:
+        matcher: exact
+        value: eval_catalog.eval_schema.eval_orders
+    get_atlan_context_for_databricks_table:
+      table_identifier:
+        matcher: exact
+        value: eval_catalog.eval_schema.eval_orders
+  expected_response_behavior: answer
+- id: workflow-sequence-conversation-review
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - alternative_sequence
+  user_prompt: In Genie Space `01f00000000000000000000000000000`, list the 5 most recent conversations and show
+    up to 10 messages from the first one.
+  expected_tools:
+  - list_genie_space_conversations
+  - list_genie_conversation_messages
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - list_genie_space_conversations
+  - list_genie_conversation_messages
+  allowed_tool_sequences:
+  - - list_genie_space_conversations
+    - list_genie_messages_for_conversations
+  should_use_tool: true
+  expected_arguments:
+    list_genie_space_conversations:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      include_all:
+        matcher: exact
+        value: false
+      limit:
+        matcher: exact
+        value: 5
+    list_genie_conversation_messages:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      conversation_id:
+        matcher: exact
+        value: 01f10000000000000000000000000000
+      limit:
+        matcher: exact
+        value: 10
+    list_genie_messages_for_conversations:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      conversation_ids:
+        matcher: exact
+        value:
+        - 01f10000000000000000000000000000
+      limit_per_conversation:
+        matcher: exact
+        value: 10
+  expected_response_behavior: answer
+- id: workflow-sequence-conversation-batch-review
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  user_prompt: List recent conversations in Genie Space `01f00000000000000000000000000000`, then fetch up to 10
+    messages for the first two conversations in one batch.
+  expected_tools:
+  - list_genie_space_conversations
+  - list_genie_messages_for_conversations
+  allowed_tools: []
+  forbidden_tools:
+  - list_genie_conversation_messages
+  expected_tool_sequence:
+  - list_genie_space_conversations
+  - list_genie_messages_for_conversations
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    list_genie_space_conversations:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+    list_genie_messages_for_conversations:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      conversation_ids:
+        matcher: exact
+        value:
+        - 01f10000000000000000000000000000
+        - 01f10000000000000000000000000001
+      limit_per_conversation:
+        matcher: exact
+        value: 10
+  expected_response_behavior: answer
+- id: workflow-sequence-usage-async
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - alternative_sequence
+  user_prompt: Start a 7-day usage query for Genie Space `01f00000000000000000000000000000`, then check the returned
+    statement once and report its current result.
+  expected_tools:
+  - start_genie_usage_metrics_query
+  - get_genie_usage_metrics_query_result
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - start_genie_usage_metrics_query
+  - get_genie_usage_metrics_query_result
+  allowed_tool_sequences:
+  - - get_genie_usage_metrics
+  should_use_tool: true
+  expected_arguments:
+    start_genie_usage_metrics_query:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      lookback_days:
+        matcher: exact
+        value: 7
+    get_genie_usage_metrics_query_result:
+      statement_id:
+        matcher: exact
+        value: 11111111-2222-4333-8444-555555555555
+    get_genie_usage_metrics:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      lookback_days:
+        matcher: exact
+        value: 7
+  expected_response_behavior: answer
+- id: workflow-sequence-usage-and-conversations
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  user_prompt: For Genie Space `01f00000000000000000000000000000`, get the completed 7-day usage metrics and then
+    list the 5 most recent conversations for follow-up.
+  expected_tools:
+  - get_genie_usage_metrics
+  - list_genie_space_conversations
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - get_genie_usage_metrics
+  - list_genie_space_conversations
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    get_genie_usage_metrics:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      lookback_days:
+        matcher: exact
+        value: 7
+    list_genie_space_conversations:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      limit:
+        matcher: exact
+        value: 5
+  expected_response_behavior: answer
+- id: workflow-sequence-benchmark-drilldown
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  user_prompt: In Genie Space `01f00000000000000000000000000000`, list the 5 latest benchmark runs, list 5 results
+    from the first run, and open the first result in detail.
+  expected_tools:
+  - list_genie_benchmark_runs
+  - list_genie_benchmark_run_results
+  - get_genie_benchmark_result_details
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - list_genie_benchmark_runs
+  - list_genie_benchmark_run_results
+  - get_genie_benchmark_result_details
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    list_genie_benchmark_runs:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      limit:
+        matcher: exact
+        value: 5
+    list_genie_benchmark_run_results:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      run_id:
+        matcher: exact
+        value: 01f20000000000000000000000000000
+      limit:
+        matcher: exact
+        value: 5
+    get_genie_benchmark_result_details:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      run_id:
+        matcher: exact
+        value: 01f20000000000000000000000000000
+      result_id:
+        matcher: exact
+        value: 01f30000000000000000000000000000
+  expected_response_behavior: answer
+- id: workflow-sequence-benchmark-run-review
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  user_prompt: List the recent benchmark runs for Genie Space `01f00000000000000000000000000000`, then open the
+    first run and summarize its status.
+  expected_tools:
+  - list_genie_benchmark_runs
+  - get_genie_benchmark_run
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - list_genie_benchmark_runs
+  - get_genie_benchmark_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    list_genie_benchmark_runs:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+    get_genie_benchmark_run:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      run_id:
+        matcher: exact
+        value: 01f20000000000000000000000000000
+  expected_response_behavior: answer
+- id: workflow-sequence-snapshot-readiness
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - synthetic_only
+  user_prompt: Check serialization run `123456789012341`, then find restore points for Genie Space `01f00000000000000000000000000000`
+    and follow the discovery run if it is still pending.
+  expected_tools:
+  - get_genie_serialization_job_run
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_space_restore_job
+  expected_tool_sequence:
+  - get_genie_serialization_job_run
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    get_genie_serialization_job_run:
+      run_id:
+        matcher: exact
+        value: 123456789012341
+    list_genie_space_restore_points:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+    get_genie_restore_points_job_run:
+      run_id:
+        matcher: exact
+        value: 123456789012342
+  expected_response_behavior: answer
+- id: workflow-sequence-restore-points-status
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - synthetic_only
+  user_prompt: Find restore points for Genie Space `01f00000000000000000000000000000` and, if the discovery times
+    out, check the returned run once for its output.
+  expected_tools:
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  allowed_tools: []
+  forbidden_tools:
+  - start_genie_space_restore_job
+  expected_tool_sequence:
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    list_genie_space_restore_points:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+    get_genie_restore_points_job_run:
+      run_id:
+        matcher: exact
+        value: 123456789012342
+  expected_response_behavior: answer
+- id: workflow-sequence-restore-preflight
+  category: tool_sequence
+  tool_under_test: null
+  tags:
+  - sequence
+  - workflow
+  - synthetic_only
+  user_prompt: Find the restore points for Genie Space `01f00000000000000000000000000000`, follow the discovery
+    run if needed, and prepare a restore to the first available date. Do not approve or execute the restore.
+  expected_tools:
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  - start_genie_space_restore_job
+  allowed_tools: []
+  forbidden_tools: []
+  expected_tool_sequence:
+  - list_genie_space_restore_points
+  - get_genie_restore_points_job_run
+  - start_genie_space_restore_job
+  allowed_tool_sequences: []
+  should_use_tool: true
+  expected_arguments:
+    list_genie_space_restore_points:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+    get_genie_restore_points_job_run:
+      run_id:
+        matcher: exact
+        value: 123456789012342
+    start_genie_space_restore_job:
+      space_id:
+        matcher: exact
+        value: 01f00000000000000000000000000000
+      snapshot_date:
+        matcher: exact
+        value: '2026-01-15'
+      confirmation:
+        matcher: absent
+  expected_response_behavior: confirmation_required
